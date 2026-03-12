@@ -1,17 +1,22 @@
 from django.contrib import admin
-from .models import Product, Category, Brand
+from .models import Battery, Charger, Display, Brand
 
 
-@admin.register(Product)
-class ProductAdmin(admin.ModelAdmin):
-    list_display = ('id', 'title', 'category', 'brand')
+@admin.register(Battery)
+class BatteryAdmin(admin.ModelAdmin):
+    list_display = ('id', 'title', 'brand', 'watt', 'voltage', 'capacity', 'count')
 
-@admin.register(Category)
-class CategoryAdmin(admin.ModelAdmin):
-    list_display = ('id', 'name')
+
+@admin.register(Charger)
+class ChargerAdmin(admin.ModelAdmin):
+    list_display = ('id', 'title', 'brand', 'watt', 'voltage', 'count')
+
+
+@admin.register(Display)
+class DisplayAdmin(admin.ModelAdmin):
+    list_display = ('id', 'title', 'brand', 'hz', 'pin', 'count')
+
 
 @admin.register(Brand)
 class BrandAdmin(admin.ModelAdmin):
     list_display = ('id', 'name')
-
-

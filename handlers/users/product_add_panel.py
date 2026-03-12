@@ -6,11 +6,9 @@ from loader import dp, db
 from states import ProductAdd
 from keyboards.default import (
     product_buttons, product_type_buttons,
-    skip_button, cancel_button
+    hz_buttons, pin_buttons, skip_button, cancel_button
 )
-from keyboards.inline import (
-    product_confirm_keyboard
-)
+from keyboards.inline import product_confirm_keyboard
 
 
 # ======================== MAHSULOT QO'SHISH ========================
@@ -18,154 +16,159 @@ from keyboards.inline import (
 @dp.message(AdminFilter(), lambda msg: msg.text == "➕ Mahsulot qo'shish")
 async def product_add_start(msg: Message, state: FSMContext):
     await state.set_state(ProductAdd.product_type)
-    await msg.answer(
-        "Mahsulot turini tanlang:",
-        reply_markup=product_type_buttons()
-    )
+    await msg.answer("Mahsulot turini tanlang:", reply_markup=product_type_buttons())
 
 
 @dp.message(AdminFilter(), ProductAdd.product_type)
 async def product_type_chosen(msg: Message, state: FSMContext):
     if msg.text == "❌ Bekor qilish":
         await state.clear()
-        await msg.answer("❌ Bekor qilindi", reply_markup=product_buttons())
-        return
-
-    if msg.text == "🔋 Batareyka":
-        await state.update_data(product_type="batareyka", product_type_name="Batareyka")
-    elif msg.text == "🔌 Zaryadka":
-        await state.update_data(product_type="zaryadka", product_type_name="Zaryadka")
-    elif msg.text == "🔙 Orqaga":
+        return await msg.answer("❌ Bekor qilindi", reply_markup=product_buttons())
+    if msg.text == "🔙 Orqaga":
         await state.clear()
-        await msg.answer("📦 Mahsulotlar bo'limi", reply_markup=product_buttons())
-        return
-    else:
-        await msg.answer("❗ Iltimos, tugmalardan birini tanlang:")
-        return
+        return await msg.answer("📦 Mahsulotlar bo'limi", reply_markup=product_buttons())
 
+    types = {
+        "🔋 Batareyka": ("batareyka", "Batareyka"),
+        "🔌 Zaryadka": ("zaryadka", "Zaryadka"),
+        "🖥 Display": ("display", "Display"),
+    }
+    if msg.text not in types:
+        return await msg.answer("❗ Iltimos, tugmalardan birini tanlang:")
+
+    ptype, pname = types[msg.text]
+    await state.update_data(product_type=ptype, product_type_name=pname)
     await state.set_state(ProductAdd.title)
     await msg.answer("📝 Mahsulot nomini kiriting:", reply_markup=cancel_button())
 
 
 @dp.message(AdminFilter(), ProductAdd.title)
-async def product_title_entered(msg: Message, state: FSMContext):
+async def title_entered(msg: Message, state: FSMContext):
     if msg.text == "❌ Bekor qilish":
         await state.clear()
-        await msg.answer("❌ Bekor qilindi", reply_markup=product_buttons())
-        return
-
+        return await msg.answer("❌ Bekor qilindi", reply_markup=product_buttons())
     await state.update_data(title=msg.text)
     await state.set_state(ProductAdd.brand)
     await msg.answer("🏭 Brendni kiriting:", reply_markup=skip_button())
 
 
 @dp.message(AdminFilter(), ProductAdd.brand)
-async def product_brand_entered(msg: Message, state: FSMContext):
+async def brand_entered(msg: Message, state: FSMContext):
     if msg.text == "❌ Bekor qilish":
         await state.clear()
-        await msg.answer("❌ Bekor qilindi", reply_markup=product_buttons())
-        return
+        return await msg.answer("❌ Bekor qilindi", reply_markup=product_buttons())
+    await state.update_data(brand="" if msg.text == "⏭ O'tkazib yuborish" else msg.text)
 
-    if msg.text == "⏭ O'tkazib yuborish":
-        await state.update_data(brand="")
+    data = await state.get_data()
+    if data['product_type'] == 'batareyka':
+        # Faqat batareyka uchun model so'raladi
+        await state.set_state(ProductAdd.model_name)
+        await msg.answer("📱 Model nomini kiriting:", reply_markup=skip_button())
+    elif data['product_type'] == 'display':
+        # Display uchun Hz ga o'tadi
+        await state.set_state(ProductAdd.hz)
+        await msg.answer("📺 Chastotani tanlang (Hz):", reply_markup=hz_buttons())
     else:
-        await state.update_data(brand=msg.text)
-
-    await state.set_state(ProductAdd.model_name)
-    await msg.answer("📱 Model nomini kiriting:", reply_markup=skip_button())
+        # Zaryadka uchun watt ga o'tadi
+        await state.set_state(ProductAdd.watt)
+        await msg.answer("⚡ Quvvatni kiriting (masalan: 20W, 65W):", reply_markup=skip_button())
 
 
 @dp.message(AdminFilter(), ProductAdd.model_name)
-async def product_model_entered(msg: Message, state: FSMContext):
+async def model_entered(msg: Message, state: FSMContext):
     if msg.text == "❌ Bekor qilish":
         await state.clear()
-        await msg.answer("❌ Bekor qilindi", reply_markup=product_buttons())
-        return
+        return await msg.answer("❌ Bekor qilindi", reply_markup=product_buttons())
+    await state.update_data(model_name="" if msg.text == "⏭ O'tkazib yuborish" else msg.text)
 
-    if msg.text == "⏭ O'tkazib yuborish":
-        await state.update_data(model_name="")
-    else:
-        await state.update_data(model_name=msg.text)
-
+    # Faqat batareyka uchun — keyingi qadam watt
     await state.set_state(ProductAdd.watt)
     await msg.answer("⚡ Quvvatni kiriting (masalan: 20W, 65W):", reply_markup=skip_button())
 
 
+# ========== BATAREYKA / ZARYADKA FLOW ==========
+
 @dp.message(AdminFilter(), ProductAdd.watt)
-async def product_watt_entered(msg: Message, state: FSMContext):
+async def watt_entered(msg: Message, state: FSMContext):
     if msg.text == "❌ Bekor qilish":
         await state.clear()
-        await msg.answer("❌ Bekor qilindi", reply_markup=product_buttons())
-        return
-
-    if msg.text == "⏭ O'tkazib yuborish":
-        await state.update_data(watt="")
-    else:
-        await state.update_data(watt=msg.text)
-
+        return await msg.answer("❌ Bekor qilindi", reply_markup=product_buttons())
+    await state.update_data(watt="" if msg.text == "⏭ O'tkazib yuborish" else msg.text)
     await state.set_state(ProductAdd.voltage)
     await msg.answer("🔌 Kuchlanishni kiriting (masalan: 3.7V, 12V):", reply_markup=skip_button())
 
 
 @dp.message(AdminFilter(), ProductAdd.voltage)
-async def product_voltage_entered(msg: Message, state: FSMContext):
+async def voltage_entered(msg: Message, state: FSMContext):
     if msg.text == "❌ Bekor qilish":
         await state.clear()
-        await msg.answer("❌ Bekor qilindi", reply_markup=product_buttons())
-        return
-
-    if msg.text == "⏭ O'tkazib yuborish":
-        await state.update_data(voltage="")
-    else:
-        await state.update_data(voltage=msg.text)
+        return await msg.answer("❌ Bekor qilindi", reply_markup=product_buttons())
+    await state.update_data(voltage="" if msg.text == "⏭ O'tkazib yuborish" else msg.text)
 
     data = await state.get_data()
-
-    # Batareyka uchun sig'im so'rash, zaryadka uchun o'tkazib yuborish
-    if data.get("product_type") == "batareyka":
+    if data['product_type'] == 'batareyka':
         await state.set_state(ProductAdd.capacity)
         await msg.answer("🔋 Sig'imni kiriting (masalan: 5000mAh):", reply_markup=skip_button())
     else:
-        await state.update_data(capacity="")
         await state.set_state(ProductAdd.count)
         await msg.answer("📦 Mahsulot sonini kiriting:", reply_markup=cancel_button())
 
 
 @dp.message(AdminFilter(), ProductAdd.capacity)
-async def product_capacity_entered(msg: Message, state: FSMContext):
+async def capacity_entered(msg: Message, state: FSMContext):
     if msg.text == "❌ Bekor qilish":
         await state.clear()
-        await msg.answer("❌ Bekor qilindi", reply_markup=product_buttons())
-        return
-
-    if msg.text == "⏭ O'tkazib yuborish":
-        await state.update_data(capacity="")
-    else:
-        await state.update_data(capacity=msg.text)
-
+        return await msg.answer("❌ Bekor qilindi", reply_markup=product_buttons())
+    await state.update_data(capacity="" if msg.text == "⏭ O'tkazib yuborish" else msg.text)
     await state.set_state(ProductAdd.count)
     await msg.answer("📦 Mahsulot sonini kiriting:", reply_markup=cancel_button())
 
 
-@dp.message(AdminFilter(), ProductAdd.count)
-async def product_count_entered(msg: Message, state: FSMContext):
+# ========== DISPLAY FLOW ==========
+
+@dp.message(AdminFilter(), ProductAdd.hz)
+async def hz_entered(msg: Message, state: FSMContext):
     if msg.text == "❌ Bekor qilish":
         await state.clear()
-        await msg.answer("❌ Bekor qilindi", reply_markup=product_buttons())
-        return
+        return await msg.answer("❌ Bekor qilindi", reply_markup=product_buttons())
+    valid = ["60Hz", "90Hz", "120Hz", "144Hz", "⏭ O'tkazib yuborish"]
+    if msg.text not in valid:
+        return await msg.answer("❗ Iltimos, variantlardan birini tanlang:")
+    await state.update_data(hz="" if msg.text == "⏭ O'tkazib yuborish" else msg.text)
+    await state.set_state(ProductAdd.pin)
+    await msg.answer("🔌 Pin turini tanlang:", reply_markup=pin_buttons())
 
+
+@dp.message(AdminFilter(), ProductAdd.pin)
+async def pin_entered(msg: Message, state: FSMContext):
+    if msg.text == "❌ Bekor qilish":
+        await state.clear()
+        return await msg.answer("❌ Bekor qilindi", reply_markup=product_buttons())
+    valid = ["20pin", "30pin", "40pin", "50pin", "⏭ O'tkazib yuborish"]
+    if msg.text not in valid:
+        return await msg.answer("❗ Iltimos, variantlardan birini tanlang:")
+    await state.update_data(pin="" if msg.text == "⏭ O'tkazib yuborish" else msg.text)
+    await state.set_state(ProductAdd.count)
+    await msg.answer("📦 Mahsulot sonini kiriting:", reply_markup=cancel_button())
+
+
+# ========== SON VA TASDIQLASH ==========
+
+@dp.message(AdminFilter(), ProductAdd.count)
+async def count_entered(msg: Message, state: FSMContext):
+    if msg.text == "❌ Bekor qilish":
+        await state.clear()
+        return await msg.answer("❌ Bekor qilindi", reply_markup=product_buttons())
     if not msg.text.isdigit():
-        await msg.answer("❗ Iltimos, faqat son kiriting:")
-        return
+        return await msg.answer("❗ Iltimos, faqat son kiriting:")
 
     await state.update_data(count=int(msg.text))
     data = await state.get_data()
 
-    # Tasdiqlash uchun ma'lumotlarni ko'rsatish
-    product_type_emoji = "🔋" if data['product_type'] == "batareyka" else "🔌"
+    emojis = {"batareyka": "🔋", "zaryadka": "🔌", "display": "🖥"}
     text = (
         f"📋 <b>Mahsulot ma'lumotlari:</b>\n\n"
-        f"{product_type_emoji} Tur: <b>{data.get('product_type_name', '')}</b>\n"
+        f"{emojis.get(data['product_type'], '📦')} Tur: <b>{data['product_type_name']}</b>\n"
         f"📝 Nomi: <b>{data['title']}</b>\n"
     )
     if data.get('brand'):
@@ -178,67 +181,58 @@ async def product_count_entered(msg: Message, state: FSMContext):
         text += f"🔌 Kuchlanish: <b>{data['voltage']}</b>\n"
     if data.get('capacity'):
         text += f"🔋 Sig'im: <b>{data['capacity']}</b>\n"
-    text += f"📦 Soni: <b>{data['count']}</b>\n"
-    text += "\n✅ Saqlashni tasdiqlaysizmi?"
+    if data.get('hz'):
+        text += f"📺 Chastota: <b>{data['hz']}</b>\n"
+    if data.get('pin'):
+        text += f"🔌 Pin: <b>{data['pin']}</b>\n"
+    text += f"📦 Soni: <b>{data['count']}</b>\n\n✅ Saqlashni tasdiqlaysizmi?"
 
     await state.set_state(ProductAdd.confirm)
     await msg.answer(text, reply_markup=product_confirm_keyboard())
 
 
 @dp.callback_query(lambda c: c.data == "product_save")
-async def product_save_callback(call: CallbackQuery, state: FSMContext):
+async def product_save(call: CallbackQuery, state: FSMContext):
     data = await state.get_data()
-
     if not data:
-        await call.answer("❗ Ma'lumotlar topilmadi", show_alert=True)
-        return
+        return await call.answer("❗ Ma'lumotlar topilmadi", show_alert=True)
 
     try:
-        category_name = data.get('product_type_name', 'Boshqa')
-        category_id = await db.get_or_create_category(category_name)
-
         brand_id = None
         if data.get('brand'):
             brand_id = await db.get_or_create_brand(data['brand'])
 
-        product_id = await db.add_product(
-            title=data['title'],
-            product_type=data['product_type'],
-            category_id=category_id,
-            brand_id=brand_id,
-            model_name=data.get('model_name', ''),
-            watt=data.get('watt', ''),
-            voltage=data.get('voltage', ''),
-            capacity=data.get('capacity', ''),
-            count=data['count']
-        )
+        ptype = data['product_type']
+
+        if ptype == 'batareyka':
+            pid = await db.add_battery(
+                data['title'], brand_id, data.get('model_name', ''),
+                data.get('watt', ''), data.get('voltage', ''),
+                data.get('capacity', ''), data['count']
+            )
+        elif ptype == 'zaryadka':
+            pid = await db.add_charger(
+                data['title'], brand_id,
+                data.get('watt', ''), data.get('voltage', ''), data['count']
+            )
+        else:
+            pid = await db.add_display(
+                data['title'], brand_id,
+                data.get('hz', ''), data.get('pin', ''), data['count']
+            )
 
         await state.clear()
-        await call.message.edit_text(
-            f"✅ Mahsulot muvaffaqiyatli saqlandi!\n"
-            f"🆔 ID: {product_id}"
-        )
-        await call.message.answer(
-            "📦 Mahsulotlar bo'limi",
-            reply_markup=product_buttons()
-        )
+        await call.message.edit_text(f"✅ Mahsulot muvaffaqiyatli saqlandi!\n🆔 ID: {pid}")
+        await call.message.answer("📦 Mahsulotlar bo'limi", reply_markup=product_buttons())
 
     except Exception as e:
         await call.message.edit_text(f"❌ Xatolik yuz berdi: {str(e)}")
         await state.clear()
-        await call.message.answer(
-            "📦 Mahsulotlar bo'limi",
-            reply_markup=product_buttons()
-        )
+        await call.message.answer("📦 Mahsulotlar bo'limi", reply_markup=product_buttons())
 
 
 @dp.callback_query(lambda c: c.data == "product_cancel")
-async def product_cancel_callback(call: CallbackQuery, state: FSMContext):
+async def product_cancel(call: CallbackQuery, state: FSMContext):
     await state.clear()
     await call.message.edit_text("❌ Mahsulot qo'shish bekor qilindi")
-    await call.message.answer(
-        "📦 Mahsulotlar bo'limi",
-        reply_markup=product_buttons()
-    )
-
-
+    await call.message.answer("📦 Mahsulotlar bo'limi", reply_markup=product_buttons())

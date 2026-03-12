@@ -1,4 +1,5 @@
 import asyncpg
+import datetime
 from typing import Optional
 from data import config
 
@@ -22,99 +23,124 @@ class Database:
         if self.pool:
             await self.pool.close()
 
-    # ===================== PRODUCT METHODS =====================
+    # ===================== BATTERY =====================
 
-    async def add_product(self, title, product_type, category_id, brand_id,
-                          model_name, watt, voltage, capacity, count):
-        """Yangi mahsulot qo'shish"""
+    async def add_battery(self, title, brand_id, model_name, watt, voltage, capacity, count):
+        now = datetime.datetime.now().date()
         sql = """
-        INSERT INTO products (title, product_type, category_id, brand_id,
-                              model_name, watt, voltage, capacity, count,
-                              created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+        INSERT INTO batteries (title, brand_id, model_name, watt, voltage, capacity, count,
+                               created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING id
         """
-        return await self.pool.fetchval(
-            sql, title, product_type, category_id, brand_id,
-            model_name, watt, voltage, capacity, count
-        )
+        return await self.pool.fetchval(sql, title, brand_id, model_name, watt, voltage, capacity, count, now, now)
 
-    async def get_products_by_type(self, product_type):
-        """Mahsulotlarni turi bo'yicha olish"""
+    async def get_all_batteries(self):
         sql = """
-        SELECT p.id, p.title, p.product_type, p.model_name, p.watt,
-               p.voltage, p.capacity, p.count, 
-               c.name as category_name, b.name as brand_name
-        FROM products p
-        LEFT JOIN categories c ON p.category_id = c.id
-        LEFT JOIN brands b ON p.brand_id = b.id
-        WHERE p.product_type = $1
-        ORDER BY p.created_at DESC
+        SELECT b.id, b.title, b.model_name, b.watt, b.voltage, b.capacity, b.count,
+               b.created_at, br.name as brand_name
+        FROM batteries b
+        LEFT JOIN brands br ON b.brand_id = br.id
+        ORDER BY b.created_at DESC
         """
-        return await self.pool.fetch(sql, product_type)
+        return await self.pool.fetch(sql)
 
-    async def get_product_by_id(self, product_id):
-        """Mahsulotni ID bo'yicha olish"""
+    async def get_battery_by_id(self, battery_id):
         sql = """
-        SELECT p.id, p.title, p.product_type, p.model_name, p.watt,
-               p.voltage, p.capacity, p.count,
-               c.name as category_name, b.name as brand_name,
-               p.created_at
-        FROM products p
-        LEFT JOIN categories c ON p.category_id = c.id
-        LEFT JOIN brands b ON p.brand_id = b.id
-        WHERE p.id = $1
+        SELECT b.id, b.title, b.model_name, b.watt, b.voltage, b.capacity, b.count,
+               b.created_at, br.name as brand_name
+        FROM batteries b
+        LEFT JOIN brands br ON b.brand_id = br.id
+        WHERE b.id = $1
         """
-        return await self.pool.fetchrow(sql, product_id)
+        return await self.pool.fetchrow(sql, battery_id)
 
-    async def reduce_product_count(self, product_id, amount):
-        """Mahsulot sonini kamaytirish (chiqarish)"""
+    # ===================== CHARGER =====================
+
+    async def add_charger(self, title, brand_id, watt, voltage, count):
+        now = datetime.datetime.now().date()
         sql = """
-        UPDATE products 
-        SET count = count - $2, updated_at = NOW()
-        WHERE id = $1
-        RETURNING count
+        INSERT INTO chargers (title, brand_id, watt, voltage, count,
+                              created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id
         """
-        return await self.pool.fetchval(sql, product_id, amount)
+        return await self.pool.fetchval(sql, title, brand_id, watt, voltage, count, now, now)
 
-    async def increase_product_count(self, product_id, amount):
-        """Mahsulot sonini ko'paytirish (qo'shish)"""
+    async def get_all_chargers(self):
         sql = """
-        UPDATE products 
-        SET count = count + $2, updated_at = NOW()
-        WHERE id = $1
-        RETURNING count
+        SELECT c.id, c.title, c.watt, c.voltage, c.count,
+               c.created_at, br.name as brand_name
+        FROM chargers c
+        LEFT JOIN brands br ON c.brand_id = br.id
+        ORDER BY c.created_at DESC
         """
-        return await self.pool.fetchval(sql, product_id, amount)
+        return await self.pool.fetch(sql)
 
-    async def delete_product(self, product_id):
-        """Mahsulotni o'chirish"""
-        sql = "DELETE FROM products WHERE id = $1"
+    async def get_charger_by_id(self, charger_id):
+        sql = """
+        SELECT c.id, c.title, c.watt, c.voltage, c.count,
+               c.created_at, br.name as brand_name
+        FROM chargers c
+        LEFT JOIN brands br ON c.brand_id = br.id
+        WHERE c.id = $1
+        """
+        return await self.pool.fetchrow(sql, charger_id)
+
+    # ===================== DISPLAY =====================
+
+    async def add_display(self, title, brand_id, hz, pin, count):
+        now = datetime.datetime.now().date()
+        sql = """
+        INSERT INTO displays (title, brand_id, hz, pin, count,
+                              created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id
+        """
+        return await self.pool.fetchval(sql, title, brand_id, hz, pin, count, now, now)
+
+    async def get_all_displays(self):
+        sql = """
+        SELECT d.id, d.title, d.hz, d.pin, d.count,
+               d.created_at, br.name as brand_name
+        FROM displays d
+        LEFT JOIN brands br ON d.brand_id = br.id
+        ORDER BY d.created_at DESC
+        """
+        return await self.pool.fetch(sql)
+
+    async def get_display_by_id(self, display_id):
+        sql = """
+        SELECT d.id, d.title, d.hz, d.pin, d.count,
+               d.created_at, br.name as brand_name
+        FROM displays d
+        LEFT JOIN brands br ON d.brand_id = br.id
+        WHERE d.id = $1
+        """
+        return await self.pool.fetchrow(sql, display_id)
+
+    # ===================== UMUMIY (har 3 jadval uchun) =====================
+
+    async def reduce_count(self, table, product_id, amount):
+        now = datetime.datetime.now().date()
+        sql = f"UPDATE {table} SET count = count - $2, updated_at = $3 WHERE id = $1 RETURNING count"
+        return await self.pool.fetchval(sql, product_id, amount, now)
+
+    async def increase_count(self, table, product_id, amount):
+        now = datetime.datetime.now().date()
+        sql = f"UPDATE {table} SET count = count + $2, updated_at = $3 WHERE id = $1 RETURNING count"
+        return await self.pool.fetchval(sql, product_id, amount, now)
+
+    async def delete_product(self, table, product_id):
+        sql = f"DELETE FROM {table} WHERE id = $1"
         return await self.pool.execute(sql, product_id)
 
-    # ===================== CATEGORY METHODS =====================
-
-    async def get_or_create_category(self, name):
-        """Kategoriyani olish yoki yaratish"""
-        sql = "SELECT id FROM categories WHERE LOWER(name) = LOWER($1)"
-        result = await self.pool.fetchval(sql, name)
-        if result:
-            return result
-        sql = "INSERT INTO categories (name) VALUES ($1) RETURNING id"
-        return await self.pool.fetchval(sql, name)
-
-    # ===================== BRAND METHODS =====================
+    # ===================== BRAND =====================
 
     async def get_or_create_brand(self, name):
-        """Brendni olish yoki yaratish"""
         sql = "SELECT id FROM brands WHERE LOWER(name) = LOWER($1)"
         result = await self.pool.fetchval(sql, name)
         if result:
             return result
         sql = "INSERT INTO brands (name) VALUES ($1) RETURNING id"
         return await self.pool.fetchval(sql, name)
-
-    async def get_brands(self):
-        """Barcha brendlarni olish"""
-        sql = "SELECT id, name FROM brands ORDER BY name"
-        return await self.pool.fetch(sql)

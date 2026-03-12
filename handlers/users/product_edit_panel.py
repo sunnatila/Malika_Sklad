@@ -9,27 +9,72 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from .start import AdminFilter
 from loader import dp, db
 from states import ProductReduce, ProductIncrease
-from keyboards.default import (
-    product_buttons, product_type_buttons
-)
+from keyboards.default import product_buttons, product_type_buttons
 from keyboards.inline import (
-    product_list_keyboard,
-    product_detail_keyboard, product_delete_confirm_keyboard,
-    product_reduce_cancel_keyboard, product_increase_cancel_keyboard
+    product_list_keyboard, product_detail_keyboard,
+    product_delete_confirm_keyboard, action_cancel_keyboard
 )
 
+# ==================== KONFIGURATSIYA ====================
 
-# ==================== YORDAMCHI FUNKSIYALAR ====================
+TYPE_CONFIG = {
+    "batareyka": {
+        "prefix": "bat", "name": "Batareyka", "plural": "Batareykalar", "emoji": "🔋",
+        "table": "batteries",
+        "headers": ['#', 'Nomi', 'Brend', 'Model', 'Quvvat', 'Kuchlanish', "Sig'im", 'Soni', "Sana"],
+        "widths": [5, 28, 14, 14, 10, 12, 14, 8, 16],
+        "soni_col": 8,
+        "row_fn": lambda p, i: [
+            i, p['title'], p.get('brand_name','') or '', p.get('model_name','') or '',
+            p.get('watt','') or '', p.get('voltage','') or '', p.get('capacity','') or '',
+            p['count'], p['created_at'].strftime('%d.%m.%Y') if p.get('created_at') else ''
+        ],
+        "get_all": "get_all_batteries", "get_by_id": "get_battery_by_id",
+    },
+    "zaryadka": {
+        "prefix": "chr", "name": "Zaryadka", "plural": "Zaryadkalar", "emoji": "🔌",
+        "table": "chargers",
+        "headers": ['#', 'Nomi', 'Brend', 'Quvvat', 'Kuchlanish', 'Soni', "Sana"],
+        "widths": [5, 28, 14, 10, 12, 8, 16],
+        "soni_col": 6,
+        "row_fn": lambda p, i: [
+            i, p['title'], p.get('brand_name','') or '',
+            p.get('watt','') or '', p.get('voltage','') or '',
+            p['count'], p['created_at'].strftime('%d.%m.%Y') if p.get('created_at') else ''
+        ],
+        "get_all": "get_all_chargers", "get_by_id": "get_charger_by_id",
+    },
+    "display": {
+        "prefix": "dsp", "name": "Display", "plural": "Displaylar", "emoji": "🖥",
+        "table": "displays",
+        "headers": ['#', 'Nomi', 'Brend', 'Hz', 'Pin', 'Soni', "Sana"],
+        "widths": [5, 28, 14, 10, 10, 8, 16],
+        "soni_col": 6,
+        "row_fn": lambda p, i: [
+            i, p['title'], p.get('brand_name','') or '',
+            p.get('hz','') or '', p.get('pin','') or '',
+            p['count'], p['created_at'].strftime('%d.%m.%Y') if p.get('created_at') else ''
+        ],
+        "get_all": "get_all_displays", "get_by_id": "get_display_by_id",
+    },
+}
 
-def format_product_detail(product) -> str:
-    """Mahsulot ma'lumotlarini formatlash"""
-    product_type_emoji = "🔋" if product['product_type'] == "batareyka" else "🔌"
-    type_name = "Batareyka" if product['product_type'] == "batareyka" else "Zaryadka"
+PREFIX_MAP = {v["prefix"]: k for k, v in TYPE_CONFIG.items()}
 
+
+def get_config_by_prefix(prefix):
+    ptype = PREFIX_MAP.get(prefix)
+    return TYPE_CONFIG[ptype] if ptype else None
+
+
+# ==================== YORDAMCHI ====================
+
+def format_detail(product, ptype) -> str:
+    cfg = TYPE_CONFIG[ptype]
     text = (
         f"📋 <b>Mahsulot haqida to'liq ma'lumot:</b>\n\n"
         f"🆔 ID: <b>{product['id']}</b>\n"
-        f"{product_type_emoji} Tur: <b>{type_name}</b>\n"
+        f"{cfg['emoji']} Tur: <b>{cfg['name']}</b>\n"
         f"📝 Nomi: <b>{product['title']}</b>\n"
     )
     if product.get('brand_name'):
@@ -42,430 +87,340 @@ def format_product_detail(product) -> str:
         text += f"🔌 Kuchlanish: <b>{product['voltage']}</b>\n"
     if product.get('capacity'):
         text += f"🔋 Sig'im: <b>{product['capacity']}</b>\n"
+    if product.get('hz'):
+        text += f"📺 Chastota: <b>{product['hz']}</b>\n"
+    if product.get('pin'):
+        text += f"🔌 Pin: <b>{product['pin']}</b>\n"
     text += f"📦 Soni: <b>{product['count']}</b> dona\n"
-
     if product.get('created_at'):
-        text += f"📅 Qo'shilgan: <b>{product['created_at'].strftime('%d.%m.%Y %H:%M')}</b>\n"
-
+        text += f"📅 Qo'shilgan: <b>{product['created_at'].strftime('%d.%m.%Y')}</b>\n"
     return text
 
 
-def generate_products_excel(products, type_name, emoji) -> str:
-    """Mahsulotlar ro'yxatini Excel faylga yozish"""
+def generate_excel(products, cfg) -> str:
     wb = Workbook()
     ws = wb.active
-    ws.title = type_name
+    ws.title = cfg['plural']
 
-    # Stillar
-    header_font = Font(name='Arial', bold=True, color='FFFFFF', size=11)
-    header_fill = PatternFill('solid', fgColor='2E86AB')
-    data_font = Font(name='Arial', size=10)
-    border = Border(
-        left=Side(style='thin', color='D3D3D3'),
-        right=Side(style='thin', color='D3D3D3'),
-        top=Side(style='thin', color='D3D3D3'),
-        bottom=Side(style='thin', color='D3D3D3')
+    hfont = Font(name='Arial', bold=True, color='FFFFFF', size=11)
+    hfill = PatternFill('solid', fgColor='2E86AB')
+    dfont = Font(name='Arial', size=10)
+    brd = Border(
+        left=Side(style='thin', color='D3D3D3'), right=Side(style='thin', color='D3D3D3'),
+        top=Side(style='thin', color='D3D3D3'), bottom=Side(style='thin', color='D3D3D3')
     )
-    center_align = Alignment(horizontal='center', vertical='center')
-    left_align = Alignment(horizontal='left', vertical='center')
+    ca = Alignment(horizontal='center', vertical='center')
+    la = Alignment(horizontal='left', vertical='center')
 
-    # Sarlavha qatori
-    headers = ['#', 'Nomi', 'Brend', 'Model', 'Quvvat', 'Kuchlanish', "Sig'im", 'Soni', "Qo'shilgan sana"]
-    for col, header in enumerate(headers, 1):
-        cell = ws.cell(row=1, column=col, value=header)
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.alignment = center_align
-        cell.border = border
+    for col, h in enumerate(cfg['headers'], 1):
+        c = ws.cell(row=1, column=col, value=h)
+        c.font, c.fill, c.alignment, c.border = hfont, hfill, ca, brd
 
-    # Ma'lumotlar
-    for idx, product in enumerate(products, 1):
+    for idx, p in enumerate(products, 1):
         row = idx + 1
-        created = product.get('created_at')
-        created_str = created.strftime('%d.%m.%Y %H:%M') if created else ''
+        row_data = cfg['row_fn'](p, idx)
+        rf = PatternFill('solid', fgColor='F0F8FF' if idx % 2 == 0 else 'FFFFFF')
+        for col, val in enumerate(row_data, 1):
+            c = ws.cell(row=row, column=col, value=val)
+            c.font, c.border, c.fill = dfont, brd, rf
+            c.alignment = ca if col in [1, cfg['soni_col']] else la
 
-        row_data = [
-            idx,
-            product['title'],
-            product.get('brand_name', '') or '',
-            product.get('model_name', '') or '',
-            product.get('watt', '') or '',
-            product.get('voltage', '') or '',
-            product.get('capacity', '') or '',
-            product['count'],
-            created_str
-        ]
+    tr = len(products) + 2
+    tf = PatternFill('solid', fgColor='E8F5E9')
+    tbf = Font(name='Arial', bold=True, size=10)
+    for col in range(1, len(cfg['headers']) + 1):
+        c = ws.cell(row=tr, column=col, value='')
+        c.fill, c.border = tf, brd
+    ws.cell(row=tr, column=2, value='JAMI:').font = tbf
+    sl = ws.cell(row=1, column=cfg['soni_col']).column_letter
+    tc = ws.cell(row=tr, column=cfg['soni_col'])
+    tc.value, tc.font, tc.alignment = f'=SUM({sl}2:{sl}{tr-1})', tbf, ca
 
-        # Juft/toq qator rangi
-        row_fill = PatternFill('solid', fgColor='F0F8FF') if idx % 2 == 0 else PatternFill('solid', fgColor='FFFFFF')
-
-        for col, value in enumerate(row_data, 1):
-            cell = ws.cell(row=row, column=col, value=value)
-            cell.font = data_font
-            cell.border = border
-            cell.fill = row_fill
-            cell.alignment = center_align if col in [1, 8] else left_align
-
-    # Jami qatori
-    total_row = len(products) + 2
-    total_fill = PatternFill('solid', fgColor='E8F5E9')
-    total_font = Font(name='Arial', bold=True, size=10)
-
-    ws.cell(row=total_row, column=1, value='').border = border
-    jami_cell = ws.cell(row=total_row, column=2, value='JAMI:')
-    jami_cell.font = total_font
-    jami_cell.fill = total_fill
-    jami_cell.border = border
-
-    for col in range(3, 8):
-        cell = ws.cell(row=total_row, column=col, value='')
-        cell.fill = total_fill
-        cell.border = border
-
-    total_cell = ws.cell(row=total_row, column=8)
-    total_cell.value = f'=SUM(H2:H{total_row - 1})'
-    total_cell.font = total_font
-    total_cell.fill = total_fill
-    total_cell.border = border
-    total_cell.alignment = center_align
-
-    ws.cell(row=total_row, column=9, value='').fill = total_fill
-    ws.cell(row=total_row, column=9).border = border
-
-    # Ustun kengliklari
-    col_widths = [5, 30, 15, 15, 12, 12, 15, 10, 18]
-    for i, width in enumerate(col_widths, 1):
-        ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = width
-
-    # Birinchi qatorni muzlatish
+    for i, w in enumerate(cfg['widths'], 1):
+        ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
     ws.freeze_panes = 'A2'
 
-    # Faylni saqlash
-    tmp = tempfile.NamedTemporaryFile(
-        suffix='.xlsx',
-        prefix=f'{type_name}_',
-        delete=False,
-        dir=tempfile.gettempdir()
-    )
-    filepath = tmp.name
+    tmp = tempfile.NamedTemporaryFile(suffix='.xlsx', prefix=f'{cfg["plural"]}_', delete=False, dir=tempfile.gettempdir())
+    fp = tmp.name
     tmp.close()
-    wb.save(filepath)
+    wb.save(fp)
+    return fp
 
-    return filepath
 
-
-# ======================== MAHSULOTLAR RO'YXATI ========================
+# ======================== RO'YXAT ========================
 
 @dp.message(AdminFilter(), lambda msg: msg.text == "📋 Mahsulotlar ro'yxati")
 async def product_list_start(msg: Message, state: FSMContext):
     await state.clear()
-    await msg.answer(
-        "Qaysi turdagi mahsulotlarni ko'rmoqchisiz?",
-        reply_markup=product_type_buttons()
-    )
+    await msg.answer("Qaysi turdagi mahsulotlarni ko'rmoqchisiz?", reply_markup=product_type_buttons())
     await state.set_state("product_list_type")
 
 
-@dp.message(AdminFilter(), lambda msg: msg.text in ["🔋 Batareyka", "🔌 Zaryadka"])
+@dp.message(AdminFilter(), lambda msg: msg.text in ["🔋 Batareyka", "🔌 Zaryadka", "🖥 Display"])
 async def product_list_by_type(msg: Message, state: FSMContext):
-    current_state = await state.get_state()
-    if current_state != "product_list_type":
+    current = await state.get_state()
+    if current != "product_list_type":
         return
 
-    if msg.text == "🔋 Batareyka":
-        product_type = "batareyka"
-        type_name = "Batareykalar"
-        emoji = "🔋"
-    else:
-        product_type = "zaryadka"
-        type_name = "Zaryadkalar"
-        emoji = "🔌"
+    tmap = {"🔋 Batareyka": "batareyka", "🔌 Zaryadka": "zaryadka", "🖥 Display": "display"}
+    ptype = tmap[msg.text]
+    cfg = TYPE_CONFIG[ptype]
 
-    products = await db.get_products_by_type(product_type)
+    get_all_fn = getattr(db, cfg['get_all'])
+    products = await get_all_fn()
 
     if not products:
-        await msg.answer(
-            f"❗ {emoji} {type_name} bo'yicha mahsulotlar topilmadi",
-            reply_markup=product_buttons()
-        )
         await state.clear()
-        return
+        return await msg.answer(f"❗ {cfg['emoji']} {cfg['plural']} topilmadi", reply_markup=product_buttons())
 
-    # Inline ro'yxat
     await msg.answer(
-        f"{emoji} <b>{type_name}</b> ({len(products)} ta):\n\n"
-        f"Batafsil ko'rish uchun mahsulotni tanlang 👇",
-        reply_markup=product_list_keyboard(products, product_type)
+        f"{cfg['emoji']} <b>{cfg['plural']}</b> ({len(products)} ta):\n\nMahsulotni tanlang 👇",
+        reply_markup=product_list_keyboard(products, cfg['prefix'])
     )
 
-    # Excel faylni yaratish va yuborish
     try:
-        filepath = generate_products_excel(products, type_name, emoji)
-        doc = FSInputFile(filepath, filename=f"{type_name}.xlsx")
-        await msg.answer_document(
-            doc,
-            caption=f"📊 {emoji} <b>{type_name}</b> ro'yxati — {len(products)} ta mahsulot"
-        )
-        os.unlink(filepath)
+        fp = generate_excel(products, cfg)
+        doc = FSInputFile(fp, filename=f"{cfg['plural']}.xlsx")
+        await msg.answer_document(doc, caption=f"📊 {cfg['emoji']} <b>{cfg['plural']}</b> — {len(products)} ta mahsulot")
+        os.unlink(fp)
     except Exception as e:
-        await msg.answer(f"❗ Excel faylni yaratishda xatolik: {str(e)}")
+        await msg.answer(f"❗ Excel xatolik: {str(e)}")
 
     await state.clear()
     await msg.answer("⬇️", reply_markup=product_buttons())
 
 
-# ======================== MAHSULOT TAFSILOTI ========================
+# ======================== TAFSILOT ========================
 
-@dp.callback_query(lambda c: c.data.startswith("product_view_"))
-async def product_view_detail(call: CallbackQuery):
-    product_id = int(call.data.split("_")[-1])
-    product = await db.get_product_by_id(product_id)
-
-    if not product:
-        await call.answer("❗ Mahsulot topilmadi", show_alert=True)
+@dp.callback_query(lambda c: c.data.split("_")[1] == "view")
+async def product_view(call: CallbackQuery):
+    parts = call.data.split("_")
+    prefix, pid = parts[0], int(parts[2])
+    cfg = get_config_by_prefix(prefix)
+    if not cfg:
         return
 
-    text = format_product_detail(product)
-    await call.message.edit_text(text, reply_markup=product_detail_keyboard(product_id))
-
-
-# ======================== ORTGA QAYTISH ========================
-
-@dp.callback_query(lambda c: c.data.startswith("product_back_"))
-async def product_back_to_list(call: CallbackQuery):
-    product_id = int(call.data.split("_")[-1])
-    product = await db.get_product_by_id(product_id)
+    ptype = PREFIX_MAP[prefix]
+    get_fn = getattr(db, cfg['get_by_id'])
+    product = await get_fn(pid)
 
     if not product:
-        await call.answer("❗ Mahsulot topilmadi", show_alert=True)
+        return await call.answer("❗ Topilmadi", show_alert=True)
+
+    await call.message.edit_text(format_detail(product, ptype), reply_markup=product_detail_keyboard(pid, prefix))
+
+
+# ======================== ORTGA ========================
+
+@dp.callback_query(lambda c: c.data.split("_")[1] == "back")
+async def product_back(call: CallbackQuery):
+    parts = call.data.split("_")
+    prefix = parts[0]
+    cfg = get_config_by_prefix(prefix)
+    if not cfg:
         return
 
-    product_type = product['product_type']
-    products = await db.get_products_by_type(product_type)
-
-    if product_type == "batareyka":
-        type_name = "Batareykalar"
-        emoji = "🔋"
-    else:
-        type_name = "Zaryadkalar"
-        emoji = "🔌"
+    get_all_fn = getattr(db, cfg['get_all'])
+    products = await get_all_fn()
 
     await call.message.edit_text(
-        f"{emoji} <b>{type_name}</b> ({len(products)} ta):\n\n"
-        f"Batafsil ko'rish uchun mahsulotni tanlang 👇",
-        reply_markup=product_list_keyboard(products, product_type)
+        f"{cfg['emoji']} <b>{cfg['plural']}</b> ({len(products)} ta):\n\nMahsulotni tanlang 👇",
+        reply_markup=product_list_keyboard(products, prefix)
     )
 
 
-# ======================== 📥 QO'SHISH (INCREASE) ========================
+# ======================== QO'SHISH (INCREASE) ========================
 
-@dp.callback_query(lambda c: c.data.startswith("product_increase_cancel_"))
-async def product_increase_cancel(call: CallbackQuery, state: FSMContext):
-    """Qo'shish jarayonini bekor qilish"""
-    product_id = int(call.data.split("_")[-1])
+@dp.callback_query(lambda c: c.data.split("_")[1] == "inccancel")
+async def inc_cancel(call: CallbackQuery, state: FSMContext):
+    parts = call.data.split("_")
+    prefix, pid = parts[0], int(parts[2])
+    cfg = get_config_by_prefix(prefix)
     await state.clear()
 
-    product = await db.get_product_by_id(product_id)
+    get_fn = getattr(db, cfg['get_by_id'])
+    product = await get_fn(pid)
     if not product:
-        await call.answer("❗ Mahsulot topilmadi", show_alert=True)
-        return
+        return await call.answer("❗ Topilmadi", show_alert=True)
 
-    text = format_product_detail(product)
-    await call.message.edit_text(text, reply_markup=product_detail_keyboard(product_id))
+    ptype = PREFIX_MAP[prefix]
+    await call.message.edit_text(format_detail(product, ptype), reply_markup=product_detail_keyboard(pid, prefix))
 
 
-@dp.callback_query(lambda c: c.data.startswith("product_increase_"))
-async def product_increase_start(call: CallbackQuery, state: FSMContext):
-    product_id = int(call.data.split("_")[-1])
-    product = await db.get_product_by_id(product_id)
+@dp.callback_query(lambda c: c.data.split("_")[1] == "inc")
+async def inc_start(call: CallbackQuery, state: FSMContext):
+    parts = call.data.split("_")
+    prefix, pid = parts[0], int(parts[2])
+    cfg = get_config_by_prefix(prefix)
 
+    get_fn = getattr(db, cfg['get_by_id'])
+    product = await get_fn(pid)
     if not product:
-        await call.answer("❗ Mahsulot topilmadi", show_alert=True)
-        return
+        return await call.answer("❗ Topilmadi", show_alert=True)
 
     await state.set_state(ProductIncrease.amount)
-    await state.update_data(increase_product_id=product_id)
+    await state.update_data(inc_id=pid, inc_prefix=prefix, inc_table=cfg['table'])
 
     await call.message.edit_text(
         f"📥 <b>Mahsulot soniga qo'shish</b>\n\n"
         f"📝 Mahsulot: <b>{product['title']}</b>\n"
         f"📦 Hozirgi soni: <b>{product['count']}</b> dona\n\n"
         f"Nechta qo'shilganini kiriting:",
-        reply_markup=product_increase_cancel_keyboard(product_id)
+        reply_markup=action_cancel_keyboard(pid, prefix, "inc")
     )
 
 
 @dp.message(ProductIncrease.amount)
-async def product_increase_amount(msg: Message, state: FSMContext):
-    data = await state.get_data()
-    product_id = data.get('increase_product_id')
-
+async def inc_amount(msg: Message, state: FSMContext):
     if not msg.text.isdigit():
-        await msg.answer(
-            "❗ Iltimos, faqat son kiriting!\n"
-            "Harf yoki belgi kiritmang."
-        )
-        return
-
+        return await msg.answer("❗ Faqat son kiriting! Harf yoki belgi kiritmang.")
     amount = int(msg.text)
-
     if amount <= 0:
-        await msg.answer("❗ Son 0 dan katta bo'lishi kerak!")
-        return
+        return await msg.answer("❗ Son 0 dan katta bo'lishi kerak!")
+
+    data = await state.get_data()
+    pid, prefix, table = data['inc_id'], data['inc_prefix'], data['inc_table']
+    cfg = get_config_by_prefix(prefix)
 
     try:
-        new_count = await db.increase_product_count(product_id, amount)
+        new_count = await db.increase_count(table, pid, amount)
         await state.clear()
+        await msg.answer(f"✅ Qo'shildi!\n\n📥 Qo'shildi: <b>{amount}</b> dona\n📦 Jami: <b>{new_count}</b> dona")
 
-        await msg.answer(
-            f"✅ Muvaffaqiyatli qo'shildi!\n\n"
-            f"📥 Qo'shildi: <b>{amount}</b> dona\n"
-            f"📦 Jami: <b>{new_count}</b> dona"
-        )
-
-        product = await db.get_product_by_id(product_id)
+        get_fn = getattr(db, cfg['get_by_id'])
+        product = await get_fn(pid)
         if product:
-            text = format_product_detail(product)
-            await msg.answer(text, reply_markup=product_detail_keyboard(product_id))
-
+            ptype = PREFIX_MAP[prefix]
+            await msg.answer(format_detail(product, ptype), reply_markup=product_detail_keyboard(pid, prefix))
     except Exception as e:
         await state.clear()
-        await msg.answer(f"❌ Xatolik yuz berdi: {str(e)}")
+        await msg.answer(f"❌ Xatolik: {str(e)}")
         await msg.answer("📦 Mahsulotlar bo'limi", reply_markup=product_buttons())
 
 
-# ======================== 📤 CHIQARISH (REDUCE) ========================
+# ======================== CHIQARISH (REDUCE) ========================
 
-@dp.callback_query(lambda c: c.data.startswith("product_reduce_cancel_"))
-async def product_reduce_cancel(call: CallbackQuery, state: FSMContext):
-    """Chiqarish jarayonini bekor qilish"""
-    product_id = int(call.data.split("_")[-1])
+@dp.callback_query(lambda c: c.data.split("_")[1] == "deccancel")
+async def dec_cancel(call: CallbackQuery, state: FSMContext):
+    parts = call.data.split("_")
+    prefix, pid = parts[0], int(parts[2])
+    cfg = get_config_by_prefix(prefix)
     await state.clear()
 
-    product = await db.get_product_by_id(product_id)
+    get_fn = getattr(db, cfg['get_by_id'])
+    product = await get_fn(pid)
     if not product:
-        await call.answer("❗ Mahsulot topilmadi", show_alert=True)
-        return
+        return await call.answer("❗ Topilmadi", show_alert=True)
 
-    text = format_product_detail(product)
-    await call.message.edit_text(text, reply_markup=product_detail_keyboard(product_id))
+    ptype = PREFIX_MAP[prefix]
+    await call.message.edit_text(format_detail(product, ptype), reply_markup=product_detail_keyboard(pid, prefix))
 
 
-@dp.callback_query(lambda c: c.data.startswith("product_reduce_"))
-async def product_reduce_start(call: CallbackQuery, state: FSMContext):
-    product_id = int(call.data.split("_")[-1])
-    product = await db.get_product_by_id(product_id)
+@dp.callback_query(lambda c: c.data.split("_")[1] == "dec")
+async def dec_start(call: CallbackQuery, state: FSMContext):
+    parts = call.data.split("_")
+    prefix, pid = parts[0], int(parts[2])
+    cfg = get_config_by_prefix(prefix)
 
+    get_fn = getattr(db, cfg['get_by_id'])
+    product = await get_fn(pid)
     if not product:
-        await call.answer("❗ Mahsulot topilmadi", show_alert=True)
-        return
-
+        return await call.answer("❗ Topilmadi", show_alert=True)
     if product['count'] == 0:
-        await call.answer("❗ Mahsulot soni 0 da, chiqarish mumkin emas!", show_alert=True)
-        return
+        return await call.answer("❗ Soni 0 da, chiqarish mumkin emas!", show_alert=True)
 
     await state.set_state(ProductReduce.amount)
-    await state.update_data(reduce_product_id=product_id, product_count=product['count'])
+    await state.update_data(dec_id=pid, dec_prefix=prefix, dec_table=cfg['table'], dec_count=product['count'])
 
     await call.message.edit_text(
         f"📤 <b>Mahsulotni ombordan chiqarish</b>\n\n"
         f"📝 Mahsulot: <b>{product['title']}</b>\n"
         f"📦 Hozirgi soni: <b>{product['count']}</b> dona\n\n"
         f"Nechta chiqarilganini kiriting (1 dan {product['count']} gacha):",
-        reply_markup=product_reduce_cancel_keyboard(product_id)
+        reply_markup=action_cancel_keyboard(pid, prefix, "dec")
     )
 
 
 @dp.message(ProductReduce.amount)
-async def product_reduce_amount(msg: Message, state: FSMContext):
-    data = await state.get_data()
-    product_id = data.get('reduce_product_id')
-    product_count = data.get('product_count', 0)
-
+async def dec_amount(msg: Message, state: FSMContext):
     if not msg.text.isdigit():
-        await msg.answer(
-            "❗ Iltimos, faqat son kiriting!\n"
-            "Harf yoki belgi kiritmang."
-        )
-        return
-
+        return await msg.answer("❗ Faqat son kiriting! Harf yoki belgi kiritmang.")
     amount = int(msg.text)
-
     if amount <= 0:
-        await msg.answer("❗ Son 0 dan katta bo'lishi kerak!")
-        return
+        return await msg.answer("❗ Son 0 dan katta bo'lishi kerak!")
 
-    if amount > product_count:
-        await msg.answer(
-            f"❗ Xatolik! Siz <b>{amount}</b> ta kiritdingiz, "
-            f"lekin omborda faqat <b>{product_count}</b> ta bor.\n\n"
-            f"Iltimos, 1 dan {product_count} gacha son kiriting."
+    data = await state.get_data()
+    pid, prefix, table = data['dec_id'], data['dec_prefix'], data['dec_table']
+    pcount = data['dec_count']
+    cfg = get_config_by_prefix(prefix)
+
+    if amount > pcount:
+        return await msg.answer(
+            f"❗ Siz <b>{amount}</b> ta kiritdingiz, lekin omborda faqat <b>{pcount}</b> ta bor.\n"
+            f"Iltimos, 1 dan {pcount} gacha son kiriting."
         )
-        return
 
     try:
-        new_count = await db.reduce_product_count(product_id, amount)
+        new_count = await db.reduce_count(table, pid, amount)
         await state.clear()
+        await msg.answer(f"✅ Chiqarildi!\n\n📤 Chiqarildi: <b>{amount}</b> dona\n📦 Qoldi: <b>{new_count}</b> dona")
 
-        await msg.answer(
-            f"✅ Muvaffaqiyatli chiqarildi!\n\n"
-            f"📤 Chiqarildi: <b>{amount}</b> dona\n"
-            f"📦 Qoldi: <b>{new_count}</b> dona"
-        )
-
-        product = await db.get_product_by_id(product_id)
+        get_fn = getattr(db, cfg['get_by_id'])
+        product = await get_fn(pid)
         if product:
-            text = format_product_detail(product)
-            await msg.answer(text, reply_markup=product_detail_keyboard(product_id))
-
+            ptype = PREFIX_MAP[prefix]
+            await msg.answer(format_detail(product, ptype), reply_markup=product_detail_keyboard(pid, prefix))
     except Exception as e:
         await state.clear()
-        await msg.answer(f"❌ Xatolik yuz berdi: {str(e)}")
+        await msg.answer(f"❌ Xatolik: {str(e)}")
         await msg.answer("📦 Mahsulotlar bo'limi", reply_markup=product_buttons())
 
 
-# ======================== 🗑 O'CHIRIB TASHLASH ========================
+# ======================== O'CHIRISH ========================
 
-@dp.callback_query(lambda c: c.data.startswith("product_delete_yes_"))
-async def product_delete_confirm_yes(call: CallbackQuery):
-    """O'chirishni tasdiqlash"""
-    product_id = int(call.data.split("_")[-1])
+@dp.callback_query(lambda c: c.data.split("_")[1] == "delyes")
+async def del_yes(call: CallbackQuery):
+    parts = call.data.split("_")
+    prefix, pid = parts[0], int(parts[2])
+    cfg = get_config_by_prefix(prefix)
 
     try:
-        await db.delete_product(product_id)
+        await db.delete_product(cfg['table'], pid)
         await call.message.edit_text("✅ Mahsulot muvaffaqiyatli o'chirildi!")
         await call.message.answer("📦 Mahsulotlar bo'limi", reply_markup=product_buttons())
     except Exception as e:
-        await call.message.edit_text(f"❌ Xatolik yuz berdi: {str(e)}")
+        await call.message.edit_text(f"❌ Xatolik: {str(e)}")
 
 
-@dp.callback_query(lambda c: c.data.startswith("product_delete_no_"))
-async def product_delete_confirm_no(call: CallbackQuery):
-    """O'chirishni bekor qilish - mahsulot tafsilotiga qaytish"""
-    product_id = int(call.data.split("_")[-1])
-    product = await db.get_product_by_id(product_id)
+@dp.callback_query(lambda c: c.data.split("_")[1] == "delno")
+async def del_no(call: CallbackQuery):
+    parts = call.data.split("_")
+    prefix, pid = parts[0], int(parts[2])
+    cfg = get_config_by_prefix(prefix)
 
+    get_fn = getattr(db, cfg['get_by_id'])
+    product = await get_fn(pid)
     if not product:
-        await call.answer("❗ Mahsulot topilmadi", show_alert=True)
-        return
+        return await call.answer("❗ Topilmadi", show_alert=True)
 
-    text = format_product_detail(product)
-    await call.message.edit_text(text, reply_markup=product_detail_keyboard(product_id))
+    ptype = PREFIX_MAP[prefix]
+    await call.message.edit_text(format_detail(product, ptype), reply_markup=product_detail_keyboard(pid, prefix))
 
 
-@dp.callback_query(lambda c: c.data.startswith("product_delete_"))
-async def product_delete_start(call: CallbackQuery):
-    """O'chirishni so'rash"""
-    product_id = int(call.data.split("_")[-1])
-    product = await db.get_product_by_id(product_id)
+@dp.callback_query(lambda c: c.data.split("_")[1] == "del")
+async def del_start(call: CallbackQuery):
+    parts = call.data.split("_")
+    prefix, pid = parts[0], int(parts[2])
+    cfg = get_config_by_prefix(prefix)
 
+    get_fn = getattr(db, cfg['get_by_id'])
+    product = await get_fn(pid)
     if not product:
-        await call.answer("❗ Mahsulot topilmadi", show_alert=True)
-        return
+        return await call.answer("❗ Topilmadi", show_alert=True)
 
     await call.message.edit_text(
         f"🗑 <b>Mahsulotni o'chirib tashlash</b>\n\n"
         f"📝 <b>{product['title']}</b> ni o'chirmoqchimisiz?\n\n"
         f"⚠️ Diqqat! Bu amalni qaytarib bo'lmaydi!",
-        reply_markup=product_delete_confirm_keyboard(product_id)
+        reply_markup=product_delete_confirm_keyboard(pid, prefix)
     )

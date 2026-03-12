@@ -4,5 +4,7 @@ from .buttons import (
     product_type_buttons,
     skip_button,
     cancel_button,
-    remove_keyboard
+    remove_keyboard,
+    hz_buttons,
+    pin_buttons,
 )

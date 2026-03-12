@@ -1,15 +1,21 @@
 from aiogram.fsm.state import StatesGroup, State
 
+
 class ProductAdd(StatesGroup):
-    product_type = State()
-    title = State()             # mahsulot nomi
-    brand = State()             # brend
-    model_name = State()        # model nomi
-    watt = State()              # quvvat (W)
-    voltage = State()           # kuchlanish (V)
-    capacity = State()          # sig'im (mAh) - faqat batareyka uchun
-    count = State()             # soni
-    confirm = State()           # tasdiqlash
+    product_type = State()      # batareyka, zaryadka yoki display
+    title = State()
+    brand = State()
+    model_name = State()
+    # Batareyka / Zaryadka
+    watt = State()
+    voltage = State()
+    capacity = State()          # faqat batareyka
+    # Display
+    hz = State()
+    pin = State()
+    count = State()
+    confirm = State()
+
 
 class ProductReduce(StatesGroup):
     amount = State()
