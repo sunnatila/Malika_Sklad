@@ -21,12 +21,11 @@ TYPE_CONFIG = {
     "batareyka": {
         "prefix": "bat", "name": "Batareyka", "plural": "Batareykalar", "emoji": "🔋",
         "table": "batteries",
-        "headers": ['#', 'Nomi', 'Brend', 'Model', 'Quvvat', 'Kuchlanish', "Sig'im", 'Soni', "Sana"],
-        "widths": [5, 28, 14, 14, 10, 12, 14, 8, 16],
-        "soni_col": 8,
+        "headers": ['#', 'Nomi', 'Model', 'Soni', "Sana"],
+        "widths": [5, 28, 16, 8, 14],
+        "soni_col": 4,
         "row_fn": lambda p, i: [
-            i, p['title'], p.get('brand_name','') or '', p.get('model_name','') or '',
-            p.get('watt','') or '', p.get('voltage','') or '', p.get('capacity','') or '',
+            i, p['title'], p.get('model_name', '') or '',
             p['count'], p['created_at'].strftime('%d.%m.%Y') if p.get('created_at') else ''
         ],
         "get_all": "get_all_batteries", "get_by_id": "get_battery_by_id",
@@ -34,12 +33,11 @@ TYPE_CONFIG = {
     "zaryadka": {
         "prefix": "chr", "name": "Zaryadka", "plural": "Zaryadkalar", "emoji": "🔌",
         "table": "chargers",
-        "headers": ['#', 'Nomi', 'Brend', 'Quvvat', 'Kuchlanish', 'Soni', "Sana"],
-        "widths": [5, 28, 14, 10, 12, 8, 16],
-        "soni_col": 6,
+        "headers": ['#', 'Nomi', 'Quvvat', 'Kuchlanish', 'Soni', "Sana"],
+        "widths": [5, 28, 10, 12, 8, 14],
+        "soni_col": 5,
         "row_fn": lambda p, i: [
-            i, p['title'], p.get('brand_name','') or '',
-            p.get('watt','') or '', p.get('voltage','') or '',
+            i, p['title'], p.get('watt', '') or '', p.get('voltage', '') or '',
             p['count'], p['created_at'].strftime('%d.%m.%Y') if p.get('created_at') else ''
         ],
         "get_all": "get_all_chargers", "get_by_id": "get_charger_by_id",
@@ -47,12 +45,11 @@ TYPE_CONFIG = {
     "display": {
         "prefix": "dsp", "name": "Display", "plural": "Displaylar", "emoji": "🖥",
         "table": "displays",
-        "headers": ['#', 'Nomi', 'Brend', 'Hz', 'Pin', 'Soni', "Sana"],
-        "widths": [5, 28, 14, 10, 10, 8, 16],
-        "soni_col": 6,
+        "headers": ['#', 'Nomi', 'Hz', 'Pin', 'Soni', "Sana"],
+        "widths": [5, 28, 10, 10, 8, 14],
+        "soni_col": 5,
         "row_fn": lambda p, i: [
-            i, p['title'], p.get('brand_name','') or '',
-            p.get('hz','') or '', p.get('pin','') or '',
+            i, p['title'], p.get('hz', '') or '', p.get('pin', '') or '',
             p['count'], p['created_at'].strftime('%d.%m.%Y') if p.get('created_at') else ''
         ],
         "get_all": "get_all_displays", "get_by_id": "get_display_by_id",
@@ -77,16 +74,12 @@ def format_detail(product, ptype) -> str:
         f"{cfg['emoji']} Tur: <b>{cfg['name']}</b>\n"
         f"📝 Nomi: <b>{product['title']}</b>\n"
     )
-    if product.get('brand_name'):
-        text += f"🏭 Brend: <b>{product['brand_name']}</b>\n"
     if product.get('model_name'):
         text += f"📱 Model: <b>{product['model_name']}</b>\n"
-    if product.get('watt'):
-        text += f"⚡ Quvvat: <b>{product['watt']}</b>\n"
     if product.get('voltage'):
         text += f"🔌 Kuchlanish: <b>{product['voltage']}</b>\n"
-    if product.get('capacity'):
-        text += f"🔋 Sig'im: <b>{product['capacity']}</b>\n"
+    if product.get('watt'):
+        text += f"⚡ Quvvat: <b>{product['watt']}</b>\n"
     if product.get('hz'):
         text += f"📺 Chastota: <b>{product['hz']}</b>\n"
     if product.get('pin'):
@@ -166,8 +159,7 @@ async def product_list_by_type(msg: Message, state: FSMContext):
     ptype = tmap[msg.text]
     cfg = TYPE_CONFIG[ptype]
 
-    get_all_fn = getattr(db, cfg['get_all'])
-    products = await get_all_fn()
+    products = await getattr(db, cfg['get_all'])()
 
     if not products:
         await state.clear()
@@ -199,37 +191,28 @@ async def product_view(call: CallbackQuery):
     cfg = get_config_by_prefix(prefix)
     if not cfg:
         return
-
-    ptype = PREFIX_MAP[prefix]
-    get_fn = getattr(db, cfg['get_by_id'])
-    product = await get_fn(pid)
-
+    product = await getattr(db, cfg['get_by_id'])(pid)
     if not product:
         return await call.answer("❗ Topilmadi", show_alert=True)
-
-    await call.message.edit_text(format_detail(product, ptype), reply_markup=product_detail_keyboard(pid, prefix))
+    await call.message.edit_text(format_detail(product, PREFIX_MAP[prefix]), reply_markup=product_detail_keyboard(pid, prefix))
 
 
 # ======================== ORTGA ========================
 
 @dp.callback_query(lambda c: c.data.split("_")[1] == "back")
 async def product_back(call: CallbackQuery):
-    parts = call.data.split("_")
-    prefix = parts[0]
+    prefix = call.data.split("_")[0]
     cfg = get_config_by_prefix(prefix)
     if not cfg:
         return
-
-    get_all_fn = getattr(db, cfg['get_all'])
-    products = await get_all_fn()
-
+    products = await getattr(db, cfg['get_all'])()
     await call.message.edit_text(
         f"{cfg['emoji']} <b>{cfg['plural']}</b> ({len(products)} ta):\n\nMahsulotni tanlang 👇",
         reply_markup=product_list_keyboard(products, prefix)
     )
 
 
-# ======================== QO'SHISH (INCREASE) ========================
+# ======================== QO'SHISH ========================
 
 @dp.callback_query(lambda c: c.data.split("_")[1] == "inccancel")
 async def inc_cancel(call: CallbackQuery, state: FSMContext):
@@ -237,14 +220,10 @@ async def inc_cancel(call: CallbackQuery, state: FSMContext):
     prefix, pid = parts[0], int(parts[2])
     cfg = get_config_by_prefix(prefix)
     await state.clear()
-
-    get_fn = getattr(db, cfg['get_by_id'])
-    product = await get_fn(pid)
+    product = await getattr(db, cfg['get_by_id'])(pid)
     if not product:
         return await call.answer("❗ Topilmadi", show_alert=True)
-
-    ptype = PREFIX_MAP[prefix]
-    await call.message.edit_text(format_detail(product, ptype), reply_markup=product_detail_keyboard(pid, prefix))
+    await call.message.edit_text(format_detail(product, PREFIX_MAP[prefix]), reply_markup=product_detail_keyboard(pid, prefix))
 
 
 @dp.callback_query(lambda c: c.data.split("_")[1] == "inc")
@@ -252,20 +231,13 @@ async def inc_start(call: CallbackQuery, state: FSMContext):
     parts = call.data.split("_")
     prefix, pid = parts[0], int(parts[2])
     cfg = get_config_by_prefix(prefix)
-
-    get_fn = getattr(db, cfg['get_by_id'])
-    product = await get_fn(pid)
+    product = await getattr(db, cfg['get_by_id'])(pid)
     if not product:
         return await call.answer("❗ Topilmadi", show_alert=True)
-
     await state.set_state(ProductIncrease.amount)
     await state.update_data(inc_id=pid, inc_prefix=prefix, inc_table=cfg['table'])
-
     await call.message.edit_text(
-        f"📥 <b>Mahsulot soniga qo'shish</b>\n\n"
-        f"📝 Mahsulot: <b>{product['title']}</b>\n"
-        f"📦 Hozirgi soni: <b>{product['count']}</b> dona\n\n"
-        f"Nechta qo'shilganini kiriting:",
+        f"📥 <b>Qo'shish</b>\n\n📝 {product['title']}\n📦 Hozirgi: <b>{product['count']}</b> dona\n\nNechta qo'shilganini kiriting:",
         reply_markup=action_cancel_keyboard(pid, prefix, "inc")
     )
 
@@ -273,32 +245,27 @@ async def inc_start(call: CallbackQuery, state: FSMContext):
 @dp.message(ProductIncrease.amount)
 async def inc_amount(msg: Message, state: FSMContext):
     if not msg.text.isdigit():
-        return await msg.answer("❗ Faqat son kiriting! Harf yoki belgi kiritmang.")
+        return await msg.answer("❗ Faqat son kiriting!")
     amount = int(msg.text)
     if amount <= 0:
         return await msg.answer("❗ Son 0 dan katta bo'lishi kerak!")
-
     data = await state.get_data()
     pid, prefix, table = data['inc_id'], data['inc_prefix'], data['inc_table']
     cfg = get_config_by_prefix(prefix)
-
     try:
         new_count = await db.increase_count(table, pid, amount)
         await state.clear()
-        await msg.answer(f"✅ Qo'shildi!\n\n📥 Qo'shildi: <b>{amount}</b> dona\n📦 Jami: <b>{new_count}</b> dona")
-
-        get_fn = getattr(db, cfg['get_by_id'])
-        product = await get_fn(pid)
+        await msg.answer(f"✅ Qo'shildi!\n\n📥 Qo'shildi: <b>{amount}</b>\n📦 Jami: <b>{new_count}</b> dona")
+        product = await getattr(db, cfg['get_by_id'])(pid)
         if product:
-            ptype = PREFIX_MAP[prefix]
-            await msg.answer(format_detail(product, ptype), reply_markup=product_detail_keyboard(pid, prefix))
+            await msg.answer(format_detail(product, PREFIX_MAP[prefix]), reply_markup=product_detail_keyboard(pid, prefix))
     except Exception as e:
         await state.clear()
         await msg.answer(f"❌ Xatolik: {str(e)}")
         await msg.answer("📦 Mahsulotlar bo'limi", reply_markup=product_buttons())
 
 
-# ======================== CHIQARISH (REDUCE) ========================
+# ======================== CHIQARISH ========================
 
 @dp.callback_query(lambda c: c.data.split("_")[1] == "deccancel")
 async def dec_cancel(call: CallbackQuery, state: FSMContext):
@@ -306,14 +273,10 @@ async def dec_cancel(call: CallbackQuery, state: FSMContext):
     prefix, pid = parts[0], int(parts[2])
     cfg = get_config_by_prefix(prefix)
     await state.clear()
-
-    get_fn = getattr(db, cfg['get_by_id'])
-    product = await get_fn(pid)
+    product = await getattr(db, cfg['get_by_id'])(pid)
     if not product:
         return await call.answer("❗ Topilmadi", show_alert=True)
-
-    ptype = PREFIX_MAP[prefix]
-    await call.message.edit_text(format_detail(product, ptype), reply_markup=product_detail_keyboard(pid, prefix))
+    await call.message.edit_text(format_detail(product, PREFIX_MAP[prefix]), reply_markup=product_detail_keyboard(pid, prefix))
 
 
 @dp.callback_query(lambda c: c.data.split("_")[1] == "dec")
@@ -321,21 +284,15 @@ async def dec_start(call: CallbackQuery, state: FSMContext):
     parts = call.data.split("_")
     prefix, pid = parts[0], int(parts[2])
     cfg = get_config_by_prefix(prefix)
-
-    get_fn = getattr(db, cfg['get_by_id'])
-    product = await get_fn(pid)
+    product = await getattr(db, cfg['get_by_id'])(pid)
     if not product:
         return await call.answer("❗ Topilmadi", show_alert=True)
     if product['count'] == 0:
-        return await call.answer("❗ Soni 0 da, chiqarish mumkin emas!", show_alert=True)
-
+        return await call.answer("❗ Soni 0, chiqarish mumkin emas!", show_alert=True)
     await state.set_state(ProductReduce.amount)
     await state.update_data(dec_id=pid, dec_prefix=prefix, dec_table=cfg['table'], dec_count=product['count'])
-
     await call.message.edit_text(
-        f"📤 <b>Mahsulotni ombordan chiqarish</b>\n\n"
-        f"📝 Mahsulot: <b>{product['title']}</b>\n"
-        f"📦 Hozirgi soni: <b>{product['count']}</b> dona\n\n"
+        f"📤 <b>Chiqarish</b>\n\n📝 {product['title']}\n📦 Hozirgi: <b>{product['count']}</b> dona\n\n"
         f"Nechta chiqarilganini kiriting (1 dan {product['count']} gacha):",
         reply_markup=action_cancel_keyboard(pid, prefix, "dec")
     )
@@ -344,32 +301,22 @@ async def dec_start(call: CallbackQuery, state: FSMContext):
 @dp.message(ProductReduce.amount)
 async def dec_amount(msg: Message, state: FSMContext):
     if not msg.text.isdigit():
-        return await msg.answer("❗ Faqat son kiriting! Harf yoki belgi kiritmang.")
+        return await msg.answer("❗ Faqat son kiriting!")
     amount = int(msg.text)
     if amount <= 0:
         return await msg.answer("❗ Son 0 dan katta bo'lishi kerak!")
-
     data = await state.get_data()
-    pid, prefix, table = data['dec_id'], data['dec_prefix'], data['dec_table']
-    pcount = data['dec_count']
+    pid, prefix, table, pcount = data['dec_id'], data['dec_prefix'], data['dec_table'], data['dec_count']
     cfg = get_config_by_prefix(prefix)
-
     if amount > pcount:
-        return await msg.answer(
-            f"❗ Siz <b>{amount}</b> ta kiritdingiz, lekin omborda faqat <b>{pcount}</b> ta bor.\n"
-            f"Iltimos, 1 dan {pcount} gacha son kiriting."
-        )
-
+        return await msg.answer(f"❗ Omborda faqat <b>{pcount}</b> ta bor. 1 dan {pcount} gacha kiriting.")
     try:
         new_count = await db.reduce_count(table, pid, amount)
         await state.clear()
-        await msg.answer(f"✅ Chiqarildi!\n\n📤 Chiqarildi: <b>{amount}</b> dona\n📦 Qoldi: <b>{new_count}</b> dona")
-
-        get_fn = getattr(db, cfg['get_by_id'])
-        product = await get_fn(pid)
+        await msg.answer(f"✅ Chiqarildi!\n\n📤 Chiqarildi: <b>{amount}</b>\n📦 Qoldi: <b>{new_count}</b> dona")
+        product = await getattr(db, cfg['get_by_id'])(pid)
         if product:
-            ptype = PREFIX_MAP[prefix]
-            await msg.answer(format_detail(product, ptype), reply_markup=product_detail_keyboard(pid, prefix))
+            await msg.answer(format_detail(product, PREFIX_MAP[prefix]), reply_markup=product_detail_keyboard(pid, prefix))
     except Exception as e:
         await state.clear()
         await msg.answer(f"❌ Xatolik: {str(e)}")
@@ -383,10 +330,9 @@ async def del_yes(call: CallbackQuery):
     parts = call.data.split("_")
     prefix, pid = parts[0], int(parts[2])
     cfg = get_config_by_prefix(prefix)
-
     try:
         await db.delete_product(cfg['table'], pid)
-        await call.message.edit_text("✅ Mahsulot muvaffaqiyatli o'chirildi!")
+        await call.message.edit_text("✅ Mahsulot o'chirildi!")
         await call.message.answer("📦 Mahsulotlar bo'limi", reply_markup=product_buttons())
     except Exception as e:
         await call.message.edit_text(f"❌ Xatolik: {str(e)}")
@@ -397,14 +343,10 @@ async def del_no(call: CallbackQuery):
     parts = call.data.split("_")
     prefix, pid = parts[0], int(parts[2])
     cfg = get_config_by_prefix(prefix)
-
-    get_fn = getattr(db, cfg['get_by_id'])
-    product = await get_fn(pid)
+    product = await getattr(db, cfg['get_by_id'])(pid)
     if not product:
         return await call.answer("❗ Topilmadi", show_alert=True)
-
-    ptype = PREFIX_MAP[prefix]
-    await call.message.edit_text(format_detail(product, ptype), reply_markup=product_detail_keyboard(pid, prefix))
+    await call.message.edit_text(format_detail(product, PREFIX_MAP[prefix]), reply_markup=product_detail_keyboard(pid, prefix))
 
 
 @dp.callback_query(lambda c: c.data.split("_")[1] == "del")
@@ -412,15 +354,10 @@ async def del_start(call: CallbackQuery):
     parts = call.data.split("_")
     prefix, pid = parts[0], int(parts[2])
     cfg = get_config_by_prefix(prefix)
-
-    get_fn = getattr(db, cfg['get_by_id'])
-    product = await get_fn(pid)
+    product = await getattr(db, cfg['get_by_id'])(pid)
     if not product:
         return await call.answer("❗ Topilmadi", show_alert=True)
-
     await call.message.edit_text(
-        f"🗑 <b>Mahsulotni o'chirib tashlash</b>\n\n"
-        f"📝 <b>{product['title']}</b> ni o'chirmoqchimisiz?\n\n"
-        f"⚠️ Diqqat! Bu amalni qaytarib bo'lmaydi!",
+        f"🗑 <b>O'chirib tashlash</b>\n\n📝 <b>{product['title']}</b> ni o'chirmoqchimisiz?\n\n⚠️ Bu amalni qaytarib bo'lmaydi!",
         reply_markup=product_delete_confirm_keyboard(pid, prefix)
     )

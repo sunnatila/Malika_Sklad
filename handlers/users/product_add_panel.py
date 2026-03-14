@@ -6,9 +6,19 @@ from loader import dp, db
 from states import ProductAdd
 from keyboards.default import (
     product_buttons, product_type_buttons,
-    hz_buttons, pin_buttons, skip_button, cancel_button
+    watt_buttons, volt_buttons, hz_buttons, pin_buttons,
+    skip_button, cancel_button
 )
 from keyboards.inline import product_confirm_keyboard
+
+VALID_WATTS = [
+    "45W", "65W", "90W", "100W", "110W", "130W", "135W", "150W",
+    "170W", "180W", "200W", "230W", "240W", "280W", "300W", "330W",
+    "⏭ O'tkazib yuborish"
+]
+VALID_VOLTS = ["19V", "19.5V", "20V", "⏭ O'tkazib yuborish"]
+VALID_HZ = ["60Hz", "90Hz", "120Hz", "144Hz", "165Hz", "240Hz", "⏭ O'tkazib yuborish"]
+VALID_PIN = ["20pin", "30pin", "40pin", "50pin", "⏭ O'tkazib yuborish"]
 
 
 # ======================== MAHSULOT QO'SHISH ========================
@@ -47,32 +57,22 @@ async def title_entered(msg: Message, state: FSMContext):
     if msg.text == "❌ Bekor qilish":
         await state.clear()
         return await msg.answer("❌ Bekor qilindi", reply_markup=product_buttons())
+
     await state.update_data(title=msg.text)
-    await state.set_state(ProductAdd.brand)
-    await msg.answer("🏭 Brendni kiriting:", reply_markup=skip_button())
-
-
-@dp.message(AdminFilter(), ProductAdd.brand)
-async def brand_entered(msg: Message, state: FSMContext):
-    if msg.text == "❌ Bekor qilish":
-        await state.clear()
-        return await msg.answer("❌ Bekor qilindi", reply_markup=product_buttons())
-    await state.update_data(brand="" if msg.text == "⏭ O'tkazib yuborish" else msg.text)
-
     data = await state.get_data()
+
     if data['product_type'] == 'batareyka':
-        # Faqat batareyka uchun model so'raladi
         await state.set_state(ProductAdd.model_name)
         await msg.answer("📱 Model nomini kiriting:", reply_markup=skip_button())
-    elif data['product_type'] == 'display':
-        # Display uchun Hz ga o'tadi
+    elif data['product_type'] == 'zaryadka':
+        await state.set_state(ProductAdd.watt)
+        await msg.answer("⚡ Quvvatni tanlang:", reply_markup=watt_buttons())
+    else:  # display
         await state.set_state(ProductAdd.hz)
         await msg.answer("📺 Chastotani tanlang (Hz):", reply_markup=hz_buttons())
-    else:
-        # Zaryadka uchun watt ga o'tadi
-        await state.set_state(ProductAdd.watt)
-        await msg.answer("⚡ Quvvatni kiriting (masalan: 20W, 65W):", reply_markup=skip_button())
 
+
+# ========== BATAREYKA: model → count ==========
 
 @dp.message(AdminFilter(), ProductAdd.model_name)
 async def model_entered(msg: Message, state: FSMContext):
@@ -80,22 +80,22 @@ async def model_entered(msg: Message, state: FSMContext):
         await state.clear()
         return await msg.answer("❌ Bekor qilindi", reply_markup=product_buttons())
     await state.update_data(model_name="" if msg.text == "⏭ O'tkazib yuborish" else msg.text)
-
-    # Faqat batareyka uchun — keyingi qadam watt
-    await state.set_state(ProductAdd.watt)
-    await msg.answer("⚡ Quvvatni kiriting (masalan: 20W, 65W):", reply_markup=skip_button())
+    await state.set_state(ProductAdd.count)
+    await msg.answer("📦 Mahsulot sonini kiriting:", reply_markup=cancel_button())
 
 
-# ========== BATAREYKA / ZARYADKA FLOW ==========
+# ========== ZARYADKA: watt(button) → voltage(button) → count ==========
 
 @dp.message(AdminFilter(), ProductAdd.watt)
 async def watt_entered(msg: Message, state: FSMContext):
     if msg.text == "❌ Bekor qilish":
         await state.clear()
         return await msg.answer("❌ Bekor qilindi", reply_markup=product_buttons())
+    if msg.text not in VALID_WATTS:
+        return await msg.answer("❗ Iltimos, taklif qilingan variantlardan birini tanlang:")
     await state.update_data(watt="" if msg.text == "⏭ O'tkazib yuborish" else msg.text)
     await state.set_state(ProductAdd.voltage)
-    await msg.answer("🔌 Kuchlanishni kiriting (masalan: 3.7V, 12V):", reply_markup=skip_button())
+    await msg.answer("🔌 Kuchlanishni tanlang:", reply_markup=volt_buttons())
 
 
 @dp.message(AdminFilter(), ProductAdd.voltage)
@@ -103,36 +103,21 @@ async def voltage_entered(msg: Message, state: FSMContext):
     if msg.text == "❌ Bekor qilish":
         await state.clear()
         return await msg.answer("❌ Bekor qilindi", reply_markup=product_buttons())
+    if msg.text not in VALID_VOLTS:
+        return await msg.answer("❗ Iltimos, variantlardan birini tanlang:")
     await state.update_data(voltage="" if msg.text == "⏭ O'tkazib yuborish" else msg.text)
-
-    data = await state.get_data()
-    if data['product_type'] == 'batareyka':
-        await state.set_state(ProductAdd.capacity)
-        await msg.answer("🔋 Sig'imni kiriting (masalan: 5000mAh):", reply_markup=skip_button())
-    else:
-        await state.set_state(ProductAdd.count)
-        await msg.answer("📦 Mahsulot sonini kiriting:", reply_markup=cancel_button())
-
-
-@dp.message(AdminFilter(), ProductAdd.capacity)
-async def capacity_entered(msg: Message, state: FSMContext):
-    if msg.text == "❌ Bekor qilish":
-        await state.clear()
-        return await msg.answer("❌ Bekor qilindi", reply_markup=product_buttons())
-    await state.update_data(capacity="" if msg.text == "⏭ O'tkazib yuborish" else msg.text)
     await state.set_state(ProductAdd.count)
     await msg.answer("📦 Mahsulot sonini kiriting:", reply_markup=cancel_button())
 
 
-# ========== DISPLAY FLOW ==========
+# ========== DISPLAY: hz → pin → count ==========
 
 @dp.message(AdminFilter(), ProductAdd.hz)
 async def hz_entered(msg: Message, state: FSMContext):
     if msg.text == "❌ Bekor qilish":
         await state.clear()
         return await msg.answer("❌ Bekor qilindi", reply_markup=product_buttons())
-    valid = ["60Hz", "90Hz", "120Hz", "144Hz", "⏭ O'tkazib yuborish"]
-    if msg.text not in valid:
+    if msg.text not in VALID_HZ:
         return await msg.answer("❗ Iltimos, variantlardan birini tanlang:")
     await state.update_data(hz="" if msg.text == "⏭ O'tkazib yuborish" else msg.text)
     await state.set_state(ProductAdd.pin)
@@ -144,8 +129,7 @@ async def pin_entered(msg: Message, state: FSMContext):
     if msg.text == "❌ Bekor qilish":
         await state.clear()
         return await msg.answer("❌ Bekor qilindi", reply_markup=product_buttons())
-    valid = ["20pin", "30pin", "40pin", "50pin", "⏭ O'tkazib yuborish"]
-    if msg.text not in valid:
+    if msg.text not in VALID_PIN:
         return await msg.answer("❗ Iltimos, variantlardan birini tanlang:")
     await state.update_data(pin="" if msg.text == "⏭ O'tkazib yuborish" else msg.text)
     await state.set_state(ProductAdd.count)
@@ -171,16 +155,12 @@ async def count_entered(msg: Message, state: FSMContext):
         f"{emojis.get(data['product_type'], '📦')} Tur: <b>{data['product_type_name']}</b>\n"
         f"📝 Nomi: <b>{data['title']}</b>\n"
     )
-    if data.get('brand'):
-        text += f"🏭 Brend: <b>{data['brand']}</b>\n"
     if data.get('model_name'):
         text += f"📱 Model: <b>{data['model_name']}</b>\n"
-    if data.get('watt'):
-        text += f"⚡ Quvvat: <b>{data['watt']}</b>\n"
     if data.get('voltage'):
         text += f"🔌 Kuchlanish: <b>{data['voltage']}</b>\n"
-    if data.get('capacity'):
-        text += f"🔋 Sig'im: <b>{data['capacity']}</b>\n"
+    if data.get('watt'):
+        text += f"⚡ Quvvat: <b>{data['watt']}</b>\n"
     if data.get('hz'):
         text += f"📺 Chastota: <b>{data['hz']}</b>\n"
     if data.get('pin'):
@@ -198,27 +178,21 @@ async def product_save(call: CallbackQuery, state: FSMContext):
         return await call.answer("❗ Ma'lumotlar topilmadi", show_alert=True)
 
     try:
-        brand_id = None
-        if data.get('brand'):
-            brand_id = await db.get_or_create_brand(data['brand'])
-
         ptype = data['product_type']
 
         if ptype == 'batareyka':
             pid = await db.add_battery(
-                data['title'], brand_id, data.get('model_name', ''),
-                data.get('watt', ''), data.get('voltage', ''),
-                data.get('capacity', ''), data['count']
+                data['title'], data.get('model_name', ''), data['count']
             )
         elif ptype == 'zaryadka':
             pid = await db.add_charger(
-                data['title'], brand_id,
-                data.get('watt', ''), data.get('voltage', ''), data['count']
+                data['title'], data.get('watt', ''),
+                data.get('voltage', ''), data['count']
             )
         else:
             pid = await db.add_display(
-                data['title'], brand_id,
-                data.get('hz', ''), data.get('pin', ''), data['count']
+                data['title'], data.get('hz', ''),
+                data.get('pin', ''), data['count']
             )
 
         await state.clear()

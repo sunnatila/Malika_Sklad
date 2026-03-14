@@ -2,17 +2,17 @@ from aiogram.fsm.state import StatesGroup, State
 
 
 class ProductAdd(StatesGroup):
-    product_type = State()      # batareyka, zaryadka yoki display
+    product_type = State()
     title = State()
-    brand = State()
+    # Battery
     model_name = State()
-    # Batareyka / Zaryadka
+    # Charger
     watt = State()
     voltage = State()
-    capacity = State()          # faqat batareyka
     # Display
     hz = State()
     pin = State()
+    # Umumiy
     count = State()
     confirm = State()
 

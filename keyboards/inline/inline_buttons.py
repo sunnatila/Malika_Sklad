@@ -11,7 +11,6 @@ def product_confirm_keyboard() -> InlineKeyboardMarkup:
 
 
 def product_list_keyboard(products, prefix) -> InlineKeyboardMarkup:
-    """prefix: bat, chr, dsp"""
     buttons = []
     for p in products:
         buttons.append([
@@ -46,7 +45,6 @@ def product_delete_confirm_keyboard(product_id, prefix) -> InlineKeyboardMarkup:
 
 
 def action_cancel_keyboard(product_id, prefix, action) -> InlineKeyboardMarkup:
-    """action: inc yoki dec"""
     return InlineKeyboardMarkup(
         inline_keyboard=[[
             InlineKeyboardButton(text="❌ Bekor qilish", callback_data=f"{prefix}_{action}cancel_{product_id}"),
