@@ -21,11 +21,11 @@ TYPE_CONFIG = {
     "batareyka": {
         "prefix": "bat", "name": "Batareyka", "plural": "Batareykalar", "emoji": "🔋",
         "table": "batteries",
-        "headers": ['#', 'Nomi', 'Model', 'Soni', "Sana"],
+        "headers": ['#', 'Nomi', 'Brand', 'Soni', "Sana"],
         "widths": [5, 28, 16, 8, 14],
         "soni_col": 4,
         "row_fn": lambda p, i: [
-            i, p['title'], p.get('model_name', '') or '',
+            i, p['title'], p.get('category', '') or '',
             p['count'], p['created_at'].strftime('%d.%m.%Y') if p.get('created_at') else ''
         ],
         "get_all": "get_all_batteries", "get_by_id": "get_battery_by_id",
@@ -33,11 +33,12 @@ TYPE_CONFIG = {
     "zaryadka": {
         "prefix": "chr", "name": "Zaryadka", "plural": "Zaryadkalar", "emoji": "🔌",
         "table": "chargers",
-        "headers": ['#', 'Nomi', 'Quvvat', 'Kuchlanish', 'Soni', "Sana"],
-        "widths": [5, 28, 10, 12, 8, 14],
-        "soni_col": 5,
+        "headers": ['#', 'Nomi', 'Brand', 'Quvvat', 'Kuchlanish', 'Soni', "Sana"],
+        "widths": [5, 28, 16, 10, 12, 8, 14],
+        "soni_col": 6,
         "row_fn": lambda p, i: [
-            i, p['title'], p.get('watt', '') or '', p.get('voltage', '') or '',
+            i, p['title'], p.get('category', '') or '',
+            p.get('watt', '') or '', p.get('voltage', '') or '',
             p['count'], p['created_at'].strftime('%d.%m.%Y') if p.get('created_at') else ''
         ],
         "get_all": "get_all_chargers", "get_by_id": "get_charger_by_id",
@@ -74,8 +75,8 @@ def format_detail(product, ptype) -> str:
         f"{cfg['emoji']} Tur: <b>{cfg['name']}</b>\n"
         f"📝 Nomi: <b>{product['title']}</b>\n"
     )
-    if product.get('model_name'):
-        text += f"📱 Model: <b>{product['model_name']}</b>\n"
+    if product.get('category'):
+        text += f"🏷 Brand: <b>{product['category']}</b>\n"
     if product.get('voltage'):
         text += f"🔌 Kuchlanish: <b>{product['voltage']}</b>\n"
     if product.get('watt'):
@@ -144,7 +145,6 @@ def generate_excel(products, cfg) -> str:
 
 @dp.message(AdminFilter(), lambda msg: msg.text == "📋 Mahsulotlar ro'yxati")
 async def product_list_start(msg: Message, state: FSMContext):
-    await state.clear()
     await msg.answer("Qaysi turdagi mahsulotlarni ko'rmoqchisiz?", reply_markup=product_type_buttons())
     await state.set_state("product_list_type")
 

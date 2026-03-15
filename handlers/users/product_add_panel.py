@@ -7,10 +7,15 @@ from states import ProductAdd
 from keyboards.default import (
     product_buttons, product_type_buttons,
     watt_buttons, volt_buttons, hz_buttons, pin_buttons,
-    skip_button, cancel_button
+    category_buttons, skip_button, cancel_button
 )
 from keyboards.inline import product_confirm_keyboard
 
+VALID_CATEGORIES = [
+    "HP", "Asus", "Acer", "Lenovo", "Dell", "Samsung",
+    "Apple", "Xiaomi", "Huawei", "Toshiba", "MSI", "Sony",
+    "⏭ O'tkazib yuborish"
+]
 VALID_WATTS = [
     "45W", "65W", "90W", "100W", "110W", "130W", "135W", "150W",
     "170W", "180W", "200W", "230W", "240W", "280W", "300W", "330W",
@@ -61,27 +66,36 @@ async def title_entered(msg: Message, state: FSMContext):
     await state.update_data(title=msg.text)
     data = await state.get_data()
 
-    if data['product_type'] == 'batareyka':
-        await state.set_state(ProductAdd.model_name)
-        await msg.answer("📱 Model nomini kiriting:", reply_markup=skip_button())
-    elif data['product_type'] == 'zaryadka':
-        await state.set_state(ProductAdd.watt)
-        await msg.answer("⚡ Quvvatni tanlang:", reply_markup=watt_buttons())
+    if data['product_type'] in ('batareyka', 'zaryadka'):
+        # Batareyka va Zaryadka uchun — keyingi qadam: category (brand) tanlash
+        await state.set_state(ProductAdd.category)
+        await msg.answer("🏷 Brand (kategoriya) tanlang:", reply_markup=category_buttons())
     else:  # display
         await state.set_state(ProductAdd.hz)
         await msg.answer("📺 Chastotani tanlang (Hz):", reply_markup=hz_buttons())
 
 
-# ========== BATAREYKA: model → count ==========
+# ========== BATAREYKA & ZARYADKA: category (brand) tanlash ==========
 
-@dp.message(AdminFilter(), ProductAdd.model_name)
-async def model_entered(msg: Message, state: FSMContext):
+@dp.message(AdminFilter(), ProductAdd.category)
+async def category_entered(msg: Message, state: FSMContext):
     if msg.text == "❌ Bekor qilish":
         await state.clear()
         return await msg.answer("❌ Bekor qilindi", reply_markup=product_buttons())
-    await state.update_data(model_name="" if msg.text == "⏭ O'tkazib yuborish" else msg.text)
-    await state.set_state(ProductAdd.count)
-    await msg.answer("📦 Mahsulot sonini kiriting:", reply_markup=cancel_button())
+    if msg.text not in VALID_CATEGORIES:
+        return await msg.answer("❗ Iltimos, taklif qilingan brandlardan birini tanlang:")
+
+    await state.update_data(category="" if msg.text == "⏭ O'tkazib yuborish" else msg.text)
+    data = await state.get_data()
+
+    if data['product_type'] == 'batareyka':
+        # Batareyka: category → count
+        await state.set_state(ProductAdd.count)
+        await msg.answer("📦 Mahsulot sonini kiriting:", reply_markup=cancel_button())
+    else:
+        # Zaryadka: category → watt → voltage → count
+        await state.set_state(ProductAdd.watt)
+        await msg.answer("⚡ Quvvatni tanlang:", reply_markup=watt_buttons())
 
 
 # ========== ZARYADKA: watt(button) → voltage(button) → count ==========
@@ -155,8 +169,8 @@ async def count_entered(msg: Message, state: FSMContext):
         f"{emojis.get(data['product_type'], '📦')} Tur: <b>{data['product_type_name']}</b>\n"
         f"📝 Nomi: <b>{data['title']}</b>\n"
     )
-    if data.get('model_name'):
-        text += f"📱 Model: <b>{data['model_name']}</b>\n"
+    if data.get('category'):
+        text += f"🏷 Brand: <b>{data['category']}</b>\n"
     if data.get('voltage'):
         text += f"🔌 Kuchlanish: <b>{data['voltage']}</b>\n"
     if data.get('watt'):
@@ -182,12 +196,12 @@ async def product_save(call: CallbackQuery, state: FSMContext):
 
         if ptype == 'batareyka':
             pid = await db.add_battery(
-                data['title'], data.get('model_name', ''), data['count']
+                data['title'], data.get('category', ''), data['count']
             )
         elif ptype == 'zaryadka':
             pid = await db.add_charger(
-                data['title'], data.get('watt', ''),
-                data.get('voltage', ''), data['count']
+                data['title'], data.get('category', ''),
+                data.get('watt', ''), data.get('voltage', ''), data['count']
             )
         else:
             pid = await db.add_display(

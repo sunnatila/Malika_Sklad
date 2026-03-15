@@ -25,43 +25,43 @@ class Database:
 
     # ===================== BATTERY =====================
 
-    async def add_battery(self, title, model_name, count):
+    async def add_battery(self, title, category, count):
         now = datetime.date.today()
         sql = """
-        INSERT INTO batteries (title, model_name, count, created_at, updated_at)
+        INSERT INTO batteries (title, category, count, created_at, updated_at)
         VALUES ($1, $2, $3, $4, $5)
         RETURNING id
         """
-        return await self.pool.fetchval(sql, title, model_name, count, now, now)
+        return await self.pool.fetchval(sql, title, category, count, now, now)
 
     async def get_all_batteries(self):
         sql = """
-        SELECT id, title, model_name, count, created_at
+        SELECT id, title, category, count, created_at
         FROM batteries ORDER BY created_at DESC
         """
         return await self.pool.fetch(sql)
 
     async def get_battery_by_id(self, bid):
-        sql = "SELECT id, title, model_name, count, created_at FROM batteries WHERE id = $1"
+        sql = "SELECT id, title, category, count, created_at FROM batteries WHERE id = $1"
         return await self.pool.fetchrow(sql, bid)
 
     # ===================== CHARGER =====================
 
-    async def add_charger(self, title, watt, voltage, count):
+    async def add_charger(self, title, category, watt, voltage, count):
         now = datetime.date.today()
         sql = """
-        INSERT INTO chargers (title, watt, voltage, count, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        INSERT INTO chargers (title, category, watt, voltage, count, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         RETURNING id
         """
-        return await self.pool.fetchval(sql, title, watt, voltage, count, now, now)
+        return await self.pool.fetchval(sql, title, category, watt, voltage, count, now, now)
 
     async def get_all_chargers(self):
-        sql = "SELECT id, title, watt, voltage, count, created_at FROM chargers ORDER BY created_at DESC"
+        sql = "SELECT id, title, category, watt, voltage, count, created_at FROM chargers ORDER BY created_at DESC"
         return await self.pool.fetch(sql)
 
     async def get_charger_by_id(self, cid):
-        sql = "SELECT id, title, watt, voltage, count, created_at FROM chargers WHERE id = $1"
+        sql = "SELECT id, title, category, watt, voltage, count, created_at FROM chargers WHERE id = $1"
         return await self.pool.fetchrow(sql, cid)
 
     # ===================== DISPLAY =====================

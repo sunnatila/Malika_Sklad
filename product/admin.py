@@ -4,12 +4,12 @@ from .models import Battery, Charger, Display
 
 @admin.register(Battery)
 class BatteryAdmin(admin.ModelAdmin):
-    list_display = ('id', 'title', 'model_name', 'count')
+    list_display = ('id', 'title', 'category', 'count')
 
 
 @admin.register(Charger)
 class ChargerAdmin(admin.ModelAdmin):
-    list_display = ('id', 'title', 'watt', 'voltage', 'count')
+    list_display = ('id', 'title', 'category', 'watt', 'voltage', 'count')
 
 
 @admin.register(Display)

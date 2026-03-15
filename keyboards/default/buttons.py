@@ -81,6 +81,19 @@ def pin_buttons() -> ReplyKeyboardMarkup:
     )
 
 
+def category_buttons() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="HP"), KeyboardButton(text="Asus"), KeyboardButton(text="Acer")],
+            [KeyboardButton(text="Lenovo"), KeyboardButton(text="Dell"), KeyboardButton(text="Samsung")],
+            [KeyboardButton(text="Toshiba"), KeyboardButton(text="MSI")],
+            [KeyboardButton(text="⏭ O'tkazib yuborish")],
+            [KeyboardButton(text="❌ Bekor qilish")],
+        ],
+        resize_keyboard=True
+    )
+
+
 def skip_button() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[

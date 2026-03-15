@@ -3,7 +3,7 @@ from django.db import models
 
 class Battery(models.Model):
     title = models.CharField(max_length=200)
-    model_name = models.CharField(max_length=100, blank=True)
+    category = models.CharField(max_length=100, blank=True, help_text="Brand (masalan: HP, Asus, Acer)")
     count = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -19,6 +19,7 @@ class Battery(models.Model):
 
 class Charger(models.Model):
     title = models.CharField(max_length=200)
+    category = models.CharField(max_length=100, blank=True, help_text="Brand (masalan: HP, Asus, Acer)")
     watt = models.CharField(max_length=20, blank=True, help_text="Quvvat (masalan: 65W)")
     voltage = models.CharField(max_length=20, blank=True, help_text="Kuchlanish (masalan: 19V, 20V)")
     count = models.PositiveIntegerField(default=0)

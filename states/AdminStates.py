@@ -4,8 +4,8 @@ from aiogram.fsm.state import StatesGroup, State
 class ProductAdd(StatesGroup):
     product_type = State()
     title = State()
-    # Battery
-    model_name = State()
+    # Battery & Charger
+    category = State()
     # Charger
     watt = State()
     voltage = State()
