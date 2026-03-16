@@ -41,6 +41,17 @@ class Database:
         """
         return await self.pool.fetch(sql)
 
+    async def get_batteries_by_category(self, category):
+        sql = """
+        SELECT id, title, category, count, created_at
+        FROM batteries WHERE category = $1 ORDER BY created_at DESC
+        """
+        return await self.pool.fetch(sql, category)
+
+    async def get_battery_categories(self):
+        sql = "SELECT DISTINCT category FROM batteries WHERE category != '' ORDER BY category"
+        return [r['category'] for r in await self.pool.fetch(sql)]
+
     async def get_battery_by_id(self, bid):
         sql = "SELECT id, title, category, count, created_at FROM batteries WHERE id = $1"
         return await self.pool.fetchrow(sql, bid)
@@ -59,6 +70,14 @@ class Database:
     async def get_all_chargers(self):
         sql = "SELECT id, title, category, watt, voltage, count, created_at FROM chargers ORDER BY created_at DESC"
         return await self.pool.fetch(sql)
+
+    async def get_chargers_by_category(self, category):
+        sql = "SELECT id, title, category, watt, voltage, count, created_at FROM chargers WHERE category = $1 ORDER BY created_at DESC"
+        return await self.pool.fetch(sql, category)
+
+    async def get_charger_categories(self):
+        sql = "SELECT DISTINCT category FROM chargers WHERE category != '' ORDER BY category"
+        return [r['category'] for r in await self.pool.fetch(sql)]
 
     async def get_charger_by_id(self, cid):
         sql = "SELECT id, title, category, watt, voltage, count, created_at FROM chargers WHERE id = $1"
@@ -84,6 +103,11 @@ class Database:
         return await self.pool.fetchrow(sql, did)
 
     # ===================== UMUMIY =====================
+
+    async def update_category(self, table, product_id, category):
+        now = datetime.date.today()
+        sql = f"UPDATE {table} SET category = $2, updated_at = $3 WHERE id = $1"
+        return await self.pool.execute(sql, product_id, category, now)
 
     async def reduce_count(self, table, product_id, amount):
         now = datetime.date.today()

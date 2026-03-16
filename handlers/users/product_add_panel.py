@@ -13,7 +13,7 @@ from keyboards.inline import product_confirm_keyboard
 
 VALID_CATEGORIES = [
     "HP", "Asus", "Acer", "Lenovo", "Dell", "Samsung",
-    "Apple", "Xiaomi", "Huawei", "Toshiba", "MSI", "Sony",
+    "Toshiba", "MSI",
     "⏭ O'tkazib yuborish"
 ]
 VALID_WATTS = [
@@ -38,18 +38,20 @@ async def product_add_start(msg: Message, state: FSMContext):
 async def product_type_chosen(msg: Message, state: FSMContext):
     if msg.text == "❌ Bekor qilish":
         await state.clear()
-        return await msg.answer("❌ Bekor qilindi", reply_markup=product_buttons())
+        await msg.answer("❌ Bekor qilindi", reply_markup=product_buttons())
+        return
     if msg.text == "🔙 Orqaga":
+        await msg.answer("📦 Mahsulotlar bo'limi", reply_markup=product_buttons())
         await state.clear()
-        return await msg.answer("📦 Mahsulotlar bo'limi", reply_markup=product_buttons())
-
+        return
     types = {
         "🔋 Batareyka": ("batareyka", "Batareyka"),
         "🔌 Zaryadka": ("zaryadka", "Zaryadka"),
         "🖥 Display": ("display", "Display"),
     }
     if msg.text not in types:
-        return await msg.answer("❗ Iltimos, tugmalardan birini tanlang:")
+        await msg.answer("❗ Iltimos, tugmalardan birini tanlang:")
+        return
 
     ptype, pname = types[msg.text]
     await state.update_data(product_type=ptype, product_type_name=pname)
@@ -61,8 +63,8 @@ async def product_type_chosen(msg: Message, state: FSMContext):
 async def title_entered(msg: Message, state: FSMContext):
     if msg.text == "❌ Bekor qilish":
         await state.clear()
-        return await msg.answer("❌ Bekor qilindi", reply_markup=product_buttons())
-
+        await msg.answer("❌ Bekor qilindi", reply_markup=product_buttons())
+        return
     await state.update_data(title=msg.text)
     data = await state.get_data()
 

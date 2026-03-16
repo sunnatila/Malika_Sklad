@@ -23,3 +23,7 @@ class ProductReduce(StatesGroup):
 
 class ProductIncrease(StatesGroup):
     amount = State()
+
+
+class BrandChange(StatesGroup):
+    brand = State()

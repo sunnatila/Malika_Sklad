@@ -1,6 +1,7 @@
 
 from aiogram import types
 from aiogram.filters import CommandStart, BaseFilter
+from aiogram.fsm.context import FSMContext
 
 from data.config import ADMINS
 from loader import dp
@@ -27,6 +28,7 @@ async def product_panel_func(message: types.Message):
 
 
 @dp.message(AdminFilter(),lambda msg: msg.text == "🔙 Orqaga")
-async def back_func(message: types.Message):
+async def back_func(message: types.Message, state: FSMContext):
+    await state.clear()
     await message.answer("Iltimos, kerakli kategoriyani tanlang 😊", reply_markup=admin_menu())
 
